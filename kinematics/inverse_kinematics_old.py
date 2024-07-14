@@ -29,7 +29,7 @@ def velocityVector2normal(vel_x=0.5, vel_y=0):
         exit()
 
     normalVector[0] = vel_x
-    normalVector[1] = vel_y
+    normalVector[1] = -vel_y
     normalVector[2] = np.sqrt( 1 - vel_norm_squared )
 
     return normalVector
