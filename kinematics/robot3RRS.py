@@ -18,21 +18,19 @@ class robot3RRS:
         self.alpha45 = alpha45
         self.alpha46 = alpha46
 
-    def getBaseTriangle(self):
-        O01 = colvec([self.b, 0, 0])
-        O02 = colvec([-self.b/2, SQRT_3/2*self.b, 0])
-        O03 = colvec([-self.b/2, -SQRT_3/2*self.b, 0])
-
-        return np.hstack([O01, O02, O03])
+        # Define base triangle
+        self.O01 = colvec([self.b, 0, 0])
+        self.O02 = colvec([-self.b/2, SQRT_3/2*self.b, 0])
+        self.O03 = colvec([-self.b/2, -SQRT_3/2*self.b, 0])
 
     def directKinematics(self, theta1, theta2, theta3):
         pass
 
     def inverseKinematics(self, platHeight, platNormal):
-        yaw, pitch = self.getYawPitchFromNormal(platNormal)
-        platRotation = self.getRotationMatrixFromYawPitch(yaw, pitch)
-        platOrigin = self.getPlatformOrigin(platRotation.R, platHeight)
-        platTriangle = self.getPlatformTriangle(platRotation.R, platOrigin)
+        yaw, pitch = self.computeYawPitchFromNormal(platNormal)
+        platRotation = self.computeRotationMatrixFromYawPitch(yaw, pitch)
+        platOrigin = self.computePlatformOrigin(platRotation.R, platHeight)
+        platTriangle = self.computePlatformTriangle(platRotation.R, platOrigin)
 
         # Apply inverse kinematics to all three 2R robots
         
@@ -45,18 +43,18 @@ class robot3RRS:
         # Arm3
         self.theta3, self.phi3, self.O36 = self.invKin2R(self.O76, self.alpha13)
 
-    def getRotationMatrixFromYawPitch(self, yaw=0, pitch=0):
+    def computeRotationMatrixFromYawPitch(self, yaw=0, pitch=0):
         # Note: in this libray the rotations are about x y' z''
         roll = math.atan( -math.sin(yaw)*math.sin(pitch) / ( math.cos(yaw)+math.cos(pitch) ) )
         R = SO3.RPY([roll, pitch, yaw], order='xyz')
         return R
     
-    def getYawPitchFromNormal(self, normal):
+    def computeYawPitchFromNormal(self, normal):
         yaw = np.atan2(normal[1], normal[2])
         pitch = np.atan2(normal[0], normal[2])
         return yaw, pitch
 
-    def getPlatformOrigin(self, R, O7_z):
+    def computePlatformOrigin(self, R, O7_z):
         # Extract useful components of the rotation matrix
         ux = R[0][0]
         uy = R[1][0]
@@ -74,7 +72,7 @@ class robot3RRS:
 
         return self.O7
 
-    def getPlatformTriangle(self, R, O7):
+    def computePlatformTriangle(self, R, O7):
         # Devine a vector [p,0,0]' as in equations 3.4, 3.5, 3.6
         pvec = colvec([self.p, 0, 0])
     
@@ -96,6 +94,7 @@ class robot3RRS:
 
         # Rotate the point so that it is in the xz plane
         Rz_i1 = rotz(-alpha1i)
+        Rz_1i = rotz(alpha1i)
         O7j = Rz_i1 @ O7j
 
         # Translate the point so that the base triangle vertex is in 0
@@ -118,7 +117,26 @@ class robot3RRS:
         theta = gamma - beta
 
         # Calculate the elbow point
-        Oij = colvec([self.b + self.a*np.cos(theta), 0, self.a*np.sin(theta)])
+        Oij = Rz_1i @ colvec([self.b + self.a*np.cos(theta), 0, self.a*np.sin(theta)])
+
+        print(f"Theta: {theta}\nPhi: {phi}\nElbow: {Oij}")
 
         return theta, phi, Oij
+    
+    def getArmPoints(self, armLetter='A'):
+        if armLetter == 'A':
+            return np.hstack([self.O01, self.O14, self.O74])
+        elif armLetter == 'B':
+            return np.hstack([self.O02, self.O25, self.O75])
+        elif armLetter == 'C':
+            return np.hstack([self.O03, self.O36, self.O76])
+        else:
+            print("Invalid arm letter")
+            exit(0)
+
+    def getBaseTriangle(self):
+        return np.hstack([self.O01, self.O02, self.O03])
+
+    def getPlatformTriangle(self):
+        return np.hstack([self.O74, self.O75, self.O76])
         

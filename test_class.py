@@ -3,10 +3,13 @@ from kinematics.inverse_kinematics_old import *
 from spatialmath.base import *
 from spatialmath import SO3, SE3
 import matplotlib.pyplot as plt
+import argparse
 
+# Initialise plot
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
+# Drawing functions
 def pointPlot(point, ax, color='red'):
     ax.scatter(point[0], point[1], point[2], color=color)
 
@@ -22,42 +25,56 @@ def drawSegmentsClosed(vertices, plt, color='k'):
     drawSegmentsOpen(vertices, plt, color)
     plt.plot([vertices[0,0],vertices[-1,0]], [vertices[0,1],vertices[-1,1]], [vertices[0,2],vertices[-1,2]], color = color)
 
+# Argument parsing
+parser = argparse.ArgumentParser()
+parser.add_argument("-vx", help="Velocity vector [x]", default=0)
+parser.add_argument("-vy", help="Velocity vector [y]", default=0)
+parser.add_argument("-ht", help="Platform height", default=40)
+args = parser.parse_args()
+print(f"Received arguments: {args}")
+
+velx = float(args.vx)
+vely = float(args.vy)
+targetHeight = float(args.ht)
+print([velx, vely])
+
 
 
 
 robot = robot3RRS(40, 50, 40, 40)
 
 print("-----------------------------------")
-normal = velocityVector2normal(0, 0.3)
+normal = velocityVector2normal(velx, vely)
 print("-----------------------------------")
 
 baseTriangle = robot.getBaseTriangle()
-yaw, pitch = robot.getYawPitchFromNormal(normal)
-R = robot.getRotationMatrixFromYawPitch(yaw, pitch)
+#yaw, pitch = robot.getYawPitchFromNormal(normal)
+#R = robot.getRotationMatrixFromYawPitch(yaw, pitch)
 #R = robot.getRotationMatrixFromNormal(normal)
-print(R)
-platOrigin = robot.getPlatformOrigin(R.R, 80)
-print(platOrigin)
-platTriang = robot.getPlatformTriangle(R.R, platOrigin)
-print(f"triangle: {platTriang}")
+#print(R)
+#platOrigin = robot.getPlatformOrigin(R.R, 0)
+#print(platOrigin)
+#platTriang = robot.computePlatformTriangle(R.R, platOrigin)
+#print(f"triangle: {platTriang}")
 
-#theta1, phi1, O14 = robot.invKin2R(platTriang[:,0])
-#print([theta1, phi1, O14])
-print(baseTriangle[:,0])
-#arm1_points = np.hstack( [colvec(baseTriangle[:,0]), O14, colvec(platTriang[:,0])] )
-#print(arm1_points)
 
-print(robot.T)
-robot.T.plot(length=20)
+robot.inverseKinematics(targetHeight, normal)
+armA = robot.getArmPoints('A')
+armB = robot.getArmPoints('B')
+armC = robot.getArmPoints('C')
+platTriangle = robot.getPlatformTriangle()
 
-robot.inverseKinematics(80, normal)
 
 
 T_w2A = SE3(0,0,0)
 T_w2A.plot()
 drawSegmentsClosed(baseTriangle.T, plt, 'gray')
-drawSegmentsClosed(platTriang.T, plt)
-#drawSegmentsOpen(arm1_points.T, plt, color='red')
+drawSegmentsClosed(platTriangle.T, plt)
+drawSegmentsOpen(armA.T, plt, 'red')
+drawSegmentsOpen(armB.T, plt, 'green')
+drawSegmentsOpen(armC.T, plt, 'blue')
+robot.T.plot(length=20)
+
 
 plt.axis('equal')
 plt.show()
