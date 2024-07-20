@@ -24,12 +24,12 @@ class robot3RRS:
         self.O03 = colvec([-self.b/2, -SQRT_3/2*self.b, 0])
 
         # Initialize with default configuration
-        self.directKinematics()
+        self.inverseKinematics(0, 0, self.f)
 
-    def directKinematics(self, theta1, theta2, theta3):
+    def directKinematics(self):
         pass
 
-    def inverseKinematics(self, platHeight, vel_x, vel_y):
+    def inverseKinematics(self, vel_x, vel_y, platHeight):
         platNormal = self.computeNormalFromTargetVelocity(vel_x, vel_y)
         yaw, pitch = self.computeYawPitchFromNormal(platNormal)
         platRotation = self.computeRotationMatrixFromYawPitch(yaw, pitch)
@@ -87,7 +87,7 @@ class robot3RRS:
 
         self.O7 = colvec([O7_x, O7_y, O7_z])
 
-        self.T = SE3.Rt(R, self.O7)
+        self.platTransform = SE3.Rt(R, self.O7)
 
         return self.O7
 

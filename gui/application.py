@@ -7,6 +7,8 @@ from graphicsUtils.drawingFunctions import *
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
 
 import numpy as np
 
@@ -75,7 +77,7 @@ class RobotApp(ThemedTk):
         velySlider = ttk.Scale(targetSelectionFrame, from_=-1, to=1, orient='horizontal', command=self.velyScaleUpdate)
         velySlider.grid()
         
-        heightSlider = ttk.Scale(targetSelectionFrame, from_=0, to=100, orient='horizontal', command=self.heightScaleUpdate)
+        heightSlider = ttk.Scale(targetSelectionFrame, from_=0, to=100, value=self.robot.f, orient='horizontal', command=self.heightScaleUpdate)
         heightSlider.grid()
 
     def createCanvasFrame(self, master):
@@ -83,7 +85,7 @@ class RobotApp(ThemedTk):
         canvasFrame.grid(row=0,column=1,sticky='nesw',rowspan=2)
 
         # Define the figure and axis
-        self.robotFig = plt.figure(figsize=(5, 4), dpi=100)
+        self.robotFig = plt.figure(figsize=(8,8), dpi=100)
         self.robotAx = self.robotFig.add_subplot(111, projection='3d')
 
         # Create the canvas
@@ -110,7 +112,7 @@ class RobotApp(ThemedTk):
         self.drawRobot()
         
     def robotKinematics(self):
-        pass
+        self.robot.inverseKinematics(self.target_velx.get(), self.target_vely.get(), self.target_height.get())
 
     def drawRobot(self):
         # Clear the plot
@@ -118,9 +120,28 @@ class RobotApp(ThemedTk):
 
         # Get all the needed data
         baseTriangle = self.robot.getBaseTriangle()
+        platformTriangle = self.robot.getPlatformTriangle()
+        armA = self.robot.getArmPoints('A')
+        armB = self.robot.getArmPoints('B')
+        armC = self.robot.getArmPoints('C')
+        platRF = self.robot.platTransform
 
         # Draw the robot
         drawSegmentsClosed(baseTriangle, self.robotAx, marker='o')
+        drawSegmentsClosed(platformTriangle, self.robotAx, color='k', marker='o')
+        drawSegmentsOpen(armA, self.robotAx, color='red', marker='o')
+        drawSegmentsOpen(armB, self.robotAx, color='green', marker='o')
+        drawSegmentsOpen(armC, self.robotAx, color='blue', marker='o')
+        platRF.plot(length=self.robot.p/3, color='k')
+
+        # Define axes limits
+        xmax = (self.robot.b + self.robot.a) * 1.2
+        ymax = np.sqrt(3)/2 * xmax
+        zmax = (self.robot.a + self.robot.f) * 1.05
+        zmin = 0 # -self.robot.a * 1.05
+        self.robotAx.set_xlim([-0.7*xmax, xmax])
+        self.robotAx.set_ylim([-ymax, ymax])
+        self.robotAx.set_zlim([zmin, zmax])
 
         # Draw the plot in the widget
         self.canvas.draw()
