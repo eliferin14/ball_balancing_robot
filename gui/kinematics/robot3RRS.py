@@ -23,10 +23,14 @@ class robot3RRS:
         self.O02 = colvec([-self.b/2, SQRT_3/2*self.b, 0])
         self.O03 = colvec([-self.b/2, -SQRT_3/2*self.b, 0])
 
+        # Initialize with default configuration
+        self.directKinematics()
+
     def directKinematics(self, theta1, theta2, theta3):
         pass
 
-    def inverseKinematics(self, platHeight, platNormal):
+    def inverseKinematics(self, platHeight, vel_x, vel_y):
+        platNormal = self.computeNormalFromTargetVelocity(vel_x, vel_y)
         yaw, pitch = self.computeYawPitchFromNormal(platNormal)
         platRotation = self.computeRotationMatrixFromYawPitch(yaw, pitch)
         platOrigin = self.computePlatformOrigin(platRotation.R, platHeight)
@@ -42,6 +46,21 @@ class robot3RRS:
 
         # Arm3
         self.theta3, self.phi3, self.O36 = self.invKin2R(self.O76, self.alpha13)
+
+    def computeNormalFromTargetVelocity(self, vel_x=0.5, vel_y=0):
+        normalVector = np.zeros((3,))
+
+        vel_norm_squared = vel_x**2 + vel_y**2
+        # The norm of the velocity vector must be < 1
+        if vel_norm_squared >= 1:
+            print("Norm of velocity vector greater or equal to 1")
+            exit()
+
+        normalVector[0] = vel_x
+        normalVector[1] = -vel_y
+        normalVector[2] = np.sqrt( 1 - vel_norm_squared )
+
+        return normalVector
 
     def computeRotationMatrixFromYawPitch(self, yaw=0, pitch=0):
         # Note: in this libray the rotations are about x y' z''
