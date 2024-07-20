@@ -7,7 +7,7 @@ SQRT_3 = math.sqrt(3)
 
 class robot3RRS:
 
-    def __init__(self, baseDistance, armLength, forearmLength, platDistance, alpha12=2/3*np.pi, alpha13=-2/3*np.pi, alpha45=2/3*np.pi, alpha46=-2/3*np.pi) -> None:
+    def __init__(self, baseDistance, armLength, forearmLength, platDistance, alpha12=2/3*np.pi, alpha13=-2/3*np.pi, alpha45=2/3*np.pi, alpha46=-2/3*np.pi, maxTilt=0.7) -> None:
         self.b = baseDistance
         self.a = armLength
         self.f = forearmLength
@@ -17,6 +17,8 @@ class robot3RRS:
         self.alpha13 = alpha13
         self.alpha45 = alpha45
         self.alpha46 = alpha46
+
+        self.maxTilt = maxTilt
 
         # Define base triangle
         self.O01 = colvec([self.b, 0, 0])
@@ -120,16 +122,16 @@ class robot3RRS:
         O7j -= colvec([self.b, 0, 0])
 
         assert( O7j[1,0] < 1e-9)
-        print(f"Rotated and translated O7j: {O7j}")
+        #print(f"Rotated and translated O7j: {O7j}")
 
         O7jx, O7jz = O7j[0,0], O7j[2,0]
         #print(f"O7jx: {O7jx}")
 
 
         k = ( (self.a**2 + self.f**2 - O7jx**2 - O7jz**2) / (2*self.a*self.f) )
-        print(f"K: {k}")
+        #print(f"K: {k}")
         alpha = np.acos( k )
-        print(f"alpha: {alpha}")
+        #print(f"alpha: {alpha}")
         phi = np.pi - alpha
         beta = np.atan2( self.f*np.sin(phi), self.a+self.f*np.cos(phi) )
         gamma = np.atan2( O7jz, O7jx )
@@ -138,7 +140,7 @@ class robot3RRS:
         # Calculate the elbow point
         Oij = Rz_1i @ colvec([self.b + self.a*np.cos(theta), 0, self.a*np.sin(theta)])
 
-        print(f"Theta: {theta}\nPhi: {phi}\nElbow: {Oij}")
+        #print(f"Theta: {theta}\nPhi: {phi}\nElbow: {Oij}")
 
         return theta, phi, Oij
     

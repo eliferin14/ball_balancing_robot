@@ -9,6 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
 import numpy as np
 
@@ -39,12 +40,15 @@ class RobotApp(ThemedTk):
         self.forearmLength = tk.DoubleVar(self, value=60)
 
         # Target variables
-        self.target_velx = tk.DoubleVar(self, value=0)
-        self.target_vely = tk.DoubleVar(self, value=0)
+        self.target_accx = tk.DoubleVar(self, value=0)
+        self.target_accy = tk.DoubleVar(self, value=0)
         self.target_height = tk.DoubleVar(self, value=50)
-        self.target_velx.trace_add('write', self.onTargetVelxChange)
-        self.target_vely.trace_add('write', self.onTargetVelyChange)
+        self.target_accx.trace_add('write', self.onTargetAccxChange)
+        self.target_accy.trace_add('write', self.onTargetAccyChange)
         self.target_height.trace_add('write', self.onTargetHeightChange)
+
+        # init event variable
+        self.mousePressed = False
 
         # Declare robot creation frame
         self.createRobotCreationFrame(mainFrame)
@@ -71,14 +75,38 @@ class RobotApp(ThemedTk):
         targetSelectionFrame = ttk.LabelFrame(master, text="Target")
         targetSelectionFrame.grid(row=1,column=0,sticky='nesw')
 
-        velxSlider = ttk.Scale(targetSelectionFrame, from_=-1, to=1, orient='horizontal', command=self.velxScaleUpdate)
-        velxSlider.grid()
+        # Accx selector
+        accxLabel = ttk.Label(targetSelectionFrame, text="Acceleration along X")
+        accxLabel.grid(row=0,column=0)
 
-        velySlider = ttk.Scale(targetSelectionFrame, from_=-1, to=1, orient='horizontal', command=self.velyScaleUpdate)
-        velySlider.grid()
+        accxSlider = ttk.Scale(targetSelectionFrame, from_=-self.robot.maxTilt, to=self.robot.maxTilt, orient='horizontal', command=self.accxScaleUpdate)
+        accxSlider.grid(row=0,column=1)
+
+        # Accy selector
+        accyLabel = ttk.Label(targetSelectionFrame, text='Acceleration along Y')
+        accyLabel.grid(row=1,column=0)
+
+        accySlider = ttk.Scale(targetSelectionFrame, from_=-self.robot.maxTilt, to=self.robot.maxTilt, orient='horizontal', command=self.accyScaleUpdate)
+        accySlider.grid(row=1,column=1)
         
-        heightSlider = ttk.Scale(targetSelectionFrame, from_=0, to=100, value=self.robot.f, orient='horizontal', command=self.heightScaleUpdate)
-        heightSlider.grid()
+        # Height selector
+        heightLabel = ttk.Label(targetSelectionFrame, text='Platform height')
+        heightLabel.grid(row=2,column=0)
+
+        heightSlider = ttk.Scale(targetSelectionFrame, from_=0, to=(self.robot.a+self.robot.f)*0.99, value=self.robot.f, orient='horizontal', command=self.heightScaleUpdate)
+        heightSlider.grid(row=2,column=1)
+
+        # Define the figure and the axis
+        self.targetFig = plt.figure(figsize=(3,3), dpi=100)
+        self.targetAx = self.targetFig.add_subplot()
+
+        # Create the canvas
+        self.targetCanvas = FigureCanvasTkAgg(self.targetFig, targetSelectionFrame)
+        self.targetCanvas.get_tk_widget().grid(columnspan=2)
+        cid = self.targetFig.canvas.mpl_connect('button_press_event', self.onTargetCanvasPress)
+        cid = self.targetFig.canvas.mpl_connect('button_release_event', self.onTargetCanvasRelease)
+        cid = self.targetFig.canvas.mpl_connect('motion_notify_event', self.onTargetCanvasDrag)
+        self.drawTarget()
 
     def createCanvasFrame(self, master):
         canvasFrame = ttk.LabelFrame(master, text="Visualization")
@@ -89,30 +117,48 @@ class RobotApp(ThemedTk):
         self.robotAx = self.robotFig.add_subplot(111, projection='3d')
 
         # Create the canvas
-        self.canvas = FigureCanvasTkAgg(self.robotFig, canvasFrame)
-        self.canvas.get_tk_widget().grid()
+        self.robotCanvas = FigureCanvasTkAgg(self.robotFig, canvasFrame)
+        self.robotCanvas.get_tk_widget().grid()
         self.drawRobot()
 
     def onCreateRobotButtonPress(self, var, mode, index):
         pass
 
-    def onTargetVelxChange(self, var, mode, index):
-        self.kinematicsAndPlotUpdate()
+    def onTargetAccxChange(self, var, mode, index):
+        self.onTargetChange()
 
-    def onTargetVelyChange(self, var, mode, index):
-        self.kinematicsAndPlotUpdate()
+    def onTargetAccyChange(self, var, mode, index):
+        self.onTargetChange()
 
     def onTargetHeightChange(self, var, mode, index):
-        self.kinematicsAndPlotUpdate()
+        self.onTargetChange()
 
-    def kinematicsAndPlotUpdate(self):
-        print(f"New target: v=[{self.target_velx.get():.2f}, {self.target_vely.get():.2f}], h={self.target_height.get():.2f}")
+    def onTargetCanvasPress(self, event):
+        self.mousePressed = True
+        cx, cy = event.xdata, event.ydata
+        #print(f"Click: [{cx:.2f},{cy:.2f}]")
+        self.target_accx.set(cx)
+        self.target_accy.set(cy)
+
+    def onTargetCanvasRelease(self, event):
+        self.mousePressed = False
+
+    def onTargetCanvasDrag(self, event):
+        if not self.mousePressed:
+            return
+        cx, cy = event.xdata, event.ydata
+        self.target_accx.set(cx)
+        self.target_accy.set(cy)
+
+    def onTargetChange(self):
+        #print(f"New target: v=[{self.target_accx.get():.2f}, {self.target_accy.get():.2f}], h={self.target_height.get():.2f}")
 
         self.robotKinematics()
+        self.drawTarget()
         self.drawRobot()
         
     def robotKinematics(self):
-        self.robot.inverseKinematics(self.target_velx.get(), self.target_vely.get(), self.target_height.get())
+        self.robot.inverseKinematics(self.target_accx.get(), self.target_accy.get(), self.target_height.get())
 
     def drawRobot(self):
         # Clear the plot
@@ -127,12 +173,13 @@ class RobotApp(ThemedTk):
         platRF = self.robot.platTransform
 
         # Draw the robot
+        platRF.plot(length=self.robot.p/3, color='k')
         drawSegmentsClosed(baseTriangle, self.robotAx, marker='o')
         drawSegmentsClosed(platformTriangle, self.robotAx, color='k', marker='o')
         drawSegmentsOpen(armA, self.robotAx, color='red', marker='o')
         drawSegmentsOpen(armB, self.robotAx, color='green', marker='o')
         drawSegmentsOpen(armC, self.robotAx, color='blue', marker='o')
-        platRF.plot(length=self.robot.p/3, color='k')
+        #print(platRF)
 
         # Define axes limits
         xmax = (self.robot.b + self.robot.a) * 1.2
@@ -144,13 +191,31 @@ class RobotApp(ThemedTk):
         self.robotAx.set_zlim([zmin, zmax])
 
         # Draw the plot in the widget
-        self.canvas.draw()
+        self.robotCanvas.draw()
 
-    def velxScaleUpdate(self, value):
-        self.target_velx.set(value)
+    def drawTarget(self):
+        # Clear the plot
+        self.targetAx.cla()
 
-    def velyScaleUpdate(self, value):
-        self.target_vely.set(value)
+        # Draw the limit circle
+        limitCircle = plt.Circle((0,0), self.robot.maxTilt, fill=False, color='gray')
+        self.targetAx.add_artist(limitCircle)
+
+        # Draw the arrowcorresponding to target acceleration
+        self.targetAx.arrow(0, 0, self.target_accx.get(), self.target_accy.get(), width=0.015, color='k')
+
+        # Set axes limits
+        self.targetAx.set_xlim(-1,1)
+        self.targetAx.set_ylim(-1,1)
+
+        # Draw the plot in the widget
+        self.targetCanvas.draw()
+
+    def accxScaleUpdate(self, value):
+        self.target_accx.set(value)
+
+    def accyScaleUpdate(self, value):
+        self.target_accy.set(value)
 
     def heightScaleUpdate(self, value):
         self.target_height.set(value)
@@ -159,5 +224,5 @@ class RobotApp(ThemedTk):
 
 
 if __name__ == '__main__':
-    myApp = RobotApp(theme='arc')
+    myApp = RobotApp(theme='yaru')
     myApp.mainloop()
