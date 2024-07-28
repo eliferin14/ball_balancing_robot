@@ -30,8 +30,8 @@ class RobotApp(ThemedTk):
         self.style.configure('TLabelframe', padding=10)
 
         # Create a general container frame: everything goes inside here
-        mainFrame = ttk.Frame(self, height=720, width=1080, padding=10)
-        mainFrame.grid(row=0,column=0,sticky='nesw')
+        self.mainFrame = ttk.Frame(self, height=720, width=1080, padding=10)
+        self.mainFrame.grid(row=0,column=0,sticky='nesw')
 
         # Robot parameters variables
         self.baseRadius = tk.DoubleVar(self, value=50)
@@ -51,13 +51,13 @@ class RobotApp(ThemedTk):
         self.mousePressed = False
 
         # Declare robot creation frame
-        self.createRobotCreationFrame(mainFrame)
+        self.createRobotCreationFrame(self.mainFrame)
 
         # Declare target selection frame
-        self.createTargetSelectionFrame(mainFrame)
+        self.createTargetSelectionFrame(self.mainFrame)
 
         # Declare canvas frame
-        self.createCanvasFrame(mainFrame)
+        self.createCanvasFrame(self.mainFrame)
 
     def closeWindow(self, e):
         self.destroy()  
@@ -66,10 +66,32 @@ class RobotApp(ThemedTk):
     def createRobotCreationFrame(self, master):
         robotCreationFrame = ttk.LabelFrame(master, text="Robot parameters")
         robotCreationFrame.grid(row=0,column=0,sticky='nesw')
-        ph_labelParameters = ttk.Label(robotCreationFrame, text='Parameters')
-        ph_labelParameters.grid()
+        robotCreationFrame.columnconfigure([0,1],weight=1)
 
-        self.robot = robot3RRS(self.baseRadius.get(), self.armLength.get(), self.forearmLength.get(), self.platRadius.get())
+        base_labelParameters = ttk.Label(robotCreationFrame, text='Base radius')
+        base_labelParameters.grid(sticky='w')
+        baseEntry = ttk.Entry(robotCreationFrame, textvariable=self.baseRadius)
+        baseEntry.grid(row=0, column=1, sticky='e')
+
+        plat_labelParameters = ttk.Label(robotCreationFrame, text='Platform radius')
+        plat_labelParameters.grid(sticky='w')
+        platEntry = ttk.Entry(robotCreationFrame, textvariable=self.platRadius)
+        platEntry.grid(row=1, column=1, sticky='e')
+
+        arm_labelParameters = ttk.Label(robotCreationFrame, text='Arm length')
+        arm_labelParameters.grid(sticky='w')
+        armEntry = ttk.Entry(robotCreationFrame, textvariable=self.armLength)
+        armEntry.grid(row=2, column=1, sticky='e')
+
+        forearm_labelParameters = ttk.Label(robotCreationFrame, text='Forearm length')
+        forearm_labelParameters.grid(sticky='w')
+        forearmEntry = ttk.Entry(robotCreationFrame, textvariable=self.forearmLength)
+        forearmEntry.grid(row=3, column=1, sticky='e')
+
+        createRobotButton = ttk.Button(robotCreationFrame, text="Create robot", command=self.onCreateRobotButtonPress)
+        createRobotButton.grid(columnspan=2)
+
+        self.createRobot()
 
     def createTargetSelectionFrame(self, master):        
         targetSelectionFrame = ttk.LabelFrame(master, text="Target")
@@ -121,8 +143,18 @@ class RobotApp(ThemedTk):
         self.robotCanvas.get_tk_widget().grid()
         self.drawRobot()
 
-    def onCreateRobotButtonPress(self, var, mode, index):
-        pass
+    def onCreateRobotButtonPress(self):
+        print(f"Base radius: {self.baseRadius.get()}")
+        print(f"Platform radius: {self.platRadius.get()}")
+        print(f"Arm length: {self.armLength.get()}")
+        print(f"Forearm length: {self.forearmLength.get()}")
+
+        self.createRobot()
+        self.createTargetSelectionFrame(self.mainFrame)
+        self.drawRobot()
+    
+    def createRobot(self):
+        self.robot = robot3RRS(self.baseRadius.get(), self.armLength.get(), self.forearmLength.get(), self.platRadius.get())
 
     def onTargetAccxChange(self, var, mode, index):
         self.onTargetChange()
@@ -175,10 +207,10 @@ class RobotApp(ThemedTk):
         # Draw the robot
         platRF.plot(length=self.robot.p/3, color='k')
         drawSegmentsClosed(baseTriangle, self.robotAx, marker='o')
-        drawSegmentsClosed(platformTriangle, self.robotAx, color='k', marker='o')
         drawSegmentsOpen(armA, self.robotAx, color='red', marker='o')
         drawSegmentsOpen(armB, self.robotAx, color='green', marker='o')
         drawSegmentsOpen(armC, self.robotAx, color='blue', marker='o')
+        drawSegmentsClosed(platformTriangle, self.robotAx, color='k', marker='o')
         #print(platRF)
 
         # Define axes limits
