@@ -1,7 +1,7 @@
 import math
 import numpy as np
-from spatialmath.base import *
-from spatialmath import *
+import spatialmath as sm
+import spatialmath.base as smb
 
 SQRT_3 = math.sqrt(3)
 
@@ -21,9 +21,9 @@ class robot3RRS:
         self.maxTilt = maxTilt
 
         # Define base triangle
-        self.O01 = colvec([self.b, 0, 0])
-        self.O02 = colvec([-self.b/2, SQRT_3/2*self.b, 0])
-        self.O03 = colvec([-self.b/2, -SQRT_3/2*self.b, 0])
+        self.O01 = smb.colvec([self.b, 0, 0])
+        self.O02 = smb.colvec([-self.b/2, SQRT_3/2*self.b, 0])
+        self.O03 = smb.colvec([-self.b/2, -SQRT_3/2*self.b, 0])
 
         # Initialize with default configuration
         self.inverseKinematics(0, 0, self.f)
@@ -67,12 +67,12 @@ class robot3RRS:
     def computeRotationMatrixFromYawPitch(self, yaw=0, pitch=0):
         # Note: in this libray the rotations are about x y' z''
         roll = math.atan( -math.sin(yaw)*math.sin(pitch) / ( math.cos(yaw)+math.cos(pitch) ) )
-        R = SO3.RPY([roll, pitch, yaw], order='xyz')
+        R = sm.SO3.RPY([roll, pitch, yaw], order='xyz')
         return R
     
     def computeYawPitchFromNormal(self, normal):
-        yaw = np.atan2(normal[1], normal[2])
-        pitch = np.atan2(normal[0], normal[2])
+        yaw = np.arctan2(normal[1], normal[2])
+        pitch = np.arctan2(normal[0], normal[2])
         return yaw, pitch
 
     def computePlatformOrigin(self, R, O7_z):
@@ -87,26 +87,26 @@ class robot3RRS:
         # Equation 3.7
         O7_y = -uy*self.p
 
-        self.O7 = colvec([O7_x, O7_y, O7_z])
+        self.O7 = smb.colvec([O7_x, O7_y, O7_z])
 
-        self.platTransform = SE3.Rt(R, self.O7)
+        self.platTransform = sm.SE3.Rt(R, self.O7)
 
         return self.O7
 
     def computePlatformTriangle(self, R, O7):
         # Devine a vector [p,0,0]' as in equations 3.4, 3.5, 3.6
-        pvec = colvec([self.p, 0, 0])
+        pvec = smb.colvec([self.p, 0, 0])
     
         # Equation 3.4
-        self.O74 = O7 + colvec(R @ pvec)
+        self.O74 = O7 + smb.colvec(R @ pvec)
 
         # Equation 3.5
-        Rz_45 = SO3.Rz(self.alpha45).R
-        self.O75 = O7 + colvec(R @ Rz_45 @ pvec)
+        Rz_45 = sm.SO3.Rz(self.alpha45).R
+        self.O75 = O7 + smb.colvec(R @ Rz_45 @ pvec)
 
         # Equation 3.6
-        Rz_46 = SO3.Rz(self.alpha46).R
-        self.O76 = O7 + colvec(R @ Rz_46 @ pvec)
+        Rz_46 = sm.SO3.Rz(self.alpha46).R
+        self.O76 = O7 + smb.colvec(R @ Rz_46 @ pvec)
 
         return np.hstack([self.O74, self.O75, self.O76])
 
@@ -114,12 +114,12 @@ class robot3RRS:
     def invKin2R(self, O7j, alpha1i):
 
         # Rotate the point so that it is in the xz plane
-        Rz_i1 = rotz(-alpha1i)
-        Rz_1i = rotz(alpha1i)
+        Rz_i1 = smb.rotz(-alpha1i)
+        Rz_1i = smb.rotz(alpha1i)
         O7j = Rz_i1 @ O7j
 
         # Translate the point so that the base triangle vertex is in 0
-        O7j -= colvec([self.b, 0, 0])
+        O7j -= smb.colvec([self.b, 0, 0])
 
         assert( O7j[1,0] < 1e-9)
         #print(f"Rotated and translated O7j: {O7j}")
@@ -133,12 +133,12 @@ class robot3RRS:
         alpha = np.acos( k )
         #print(f"alpha: {alpha}")
         phi = np.pi - alpha
-        beta = np.atan2( self.f*np.sin(phi), self.a+self.f*np.cos(phi) )
-        gamma = np.atan2( O7jz, O7jx )
+        beta = np.arctan2( self.f*np.sin(phi), self.a+self.f*np.cos(phi) )
+        gamma = np.arctan2( O7jz, O7jx )
         theta = gamma - beta
 
         # Calculate the elbow point
-        Oij = Rz_1i @ colvec([self.b + self.a*np.cos(theta), 0, self.a*np.sin(theta)])
+        Oij = Rz_1i @ smb.colvec([self.b + self.a*np.cos(theta), 0, self.a*np.sin(theta)])
 
         #print(f"Theta: {theta}\nPhi: {phi}\nElbow: {Oij}")
 
