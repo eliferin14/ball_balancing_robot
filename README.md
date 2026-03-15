@@ -32,7 +32,7 @@ pip install -r simulation_requirements.txt
 ### 2. Run the Simulation
 ```bash
 cd src
-python launch_gui.py
+python gui/launch_gui.py
 ```
 
 ### 3. Run Validation Tests
