@@ -2,7 +2,7 @@ import numpy as np
 from gpiozero import Servo
 from gpiozero.pins.pigpio import PiGPIOFactory
 
-from robot3RRS import robot3RRS
+from robot_kinematics.robot3RRS import robot3RRS
 
 class robot3RRS_Raspberry(robot3RRS):
 

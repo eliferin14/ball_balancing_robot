@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from ttkthemes import ThemedTk
 
-from .kinematics.robot3RRS import robot3RRS
+from robot_kinematics.robot3RRS import robot3RRS
 from .graphicsUtils.drawingFunctions import *
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
