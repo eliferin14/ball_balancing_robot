@@ -15,8 +15,11 @@ A high-performance ball-balancing platform built on a 3RRS (Revolute-Revolute-Sp
 - `src/`: Core source code.
     - `robot_kinematics/`: The mathematical heart of the robot (Direct/Inverse IK).
     - `gui/`: Simulation interface, 3D rendering, and configuration tools.
-    - `pi/`: Hardware-specific modules (PID controller, Camera pipeline, FPS counters).
+    - `pi/`: Core hardware control logic (PID, Raspberry Pi specific kinematics).
+    - `config/`: Centralized robot dimensions and physical parameters.
+    - `tools/`: Independent utility scripts (FPS counter, HSV selector, Video stream).
     - `tests/`: Unit tests and mathematical consistency checks.
+- `docs/`: Data sheets, research papers, and technical documentation.
 - `simulation_requirements.txt`: Dependencies for the simulation environment.
 - `raspberry_requirements.txt`: Dependencies for the physical Raspberry Pi robot.
 
