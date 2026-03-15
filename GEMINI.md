@@ -20,4 +20,8 @@ This file provides foundational instructions for Gemini CLI when working on the 
 
 ## Workflow Mandates
 - **Validation:** Always verify kinematics changes in the `gui/` simulation before suggesting deployment to the Raspberry Pi.
+- **Testing:** After making any code changes, YOU MUST run the central test suite to ensure mathematical and functional integrity:
+  ```bash
+  source sim_venv/bin/activate && python3 src/tests/test_main.py
+  ```
 - **Documentation:** Keep `README.md` and requirements files updated as new dependencies or modules are added.
