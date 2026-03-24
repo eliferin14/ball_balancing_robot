@@ -2,7 +2,7 @@ import cv2
 import sys
 
 class CameraManager:
-    def __init__(self, width=640, height=480, target_width=320, target_height=240, framerate=60, crop=None):
+    def __init__(self, width=640, height=480, target_width=320, target_height=240, framerate=None, crop=None):
         """
         GStreamer-based Camera Manager for Raspberry Pi.
         Uses appsink properties to ensure zero-latency / latest-frame processing.
@@ -11,20 +11,22 @@ class CameraManager:
         :param height: Sensor capture height
         :param target_width: Width after hardware scaling
         :param target_height: Height after hardware scaling
-        :param framerate: Capture framerate
+        :param framerate: Optional framerate (set to None for auto)
         :param crop: Optional tuple (top, bottom, left, right) for hardware cropping
         """
         self.width = width
         self.height = height
         self.target_width = target_width
         self.target_height = target_height
-        self.framerate = framerate
         
         # Build GStreamer Pipeline
+        # Removed hardcoded framerate to prevent crashes if the sensor doesn't support it.
         # appsink drop=True max-buffers=1 ensures that if the processing loop is slow,
         # older frames are dropped and read() always returns the most recent one.
         gst_elements = [
-            f"libcamerasrc ! video/x-raw,width={self.width},height={self.height},framerate={self.framerate}/1"
+            f"libcamerasrc ! video/x-raw,width={self.width},height={self.height}",
+            "queue max-size-buffers=1 leachy=downstream", # Low latency queue
+            "videoconvert"
         ]
         
         if crop:
@@ -32,6 +34,7 @@ class CameraManager:
             gst_elements.append(f"videocrop top={t} bottom={b} left={l} right={r}")
             
         gst_elements.append(f"videoscale ! video/x-raw,width={self.target_width},height={self.target_height}")
+        gst_elements.append("queue max-size-buffers=1 leachy=downstream") # Final buffer before app
         gst_elements.append("videoconvert ! video/x-raw,format=BGR ! appsink drop=True max-buffers=1")
         
         self.pipeline = " ! ".join(gst_elements)
