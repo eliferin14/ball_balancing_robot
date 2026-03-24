@@ -1,1 +1,17 @@
-# To be populated with Raspberry Pi specific dependencies
+# Raspberry Pi Specific Dependencies
+
+# Core Math & Kinematics
+numpy
+spatialmath-python
+scipy
+
+# Computer Vision & GStreamer
+opencv-python
+
+# Control Theory
+control
+matplotlib
+
+# Hardware Interaction
+gpiozero
+pigpio

@@ -24,4 +24,5 @@ This file provides foundational instructions for Gemini CLI when working on the 
   ```bash
   source sim_venv/bin/activate && python3 src/tests/test_main.py
   ```
+- **Requirements Maintenance:** Whenever you introduce a new dependency or modify a module that adds an import, you MUST update the corresponding requirements file (`simulation_requirements.txt` or `raspberry_requirements.txt`) to reflect these changes.
 - **Documentation:** Keep `README.md` and requirements files updated as new dependencies or modules are added.
