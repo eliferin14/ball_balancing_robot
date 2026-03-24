@@ -25,7 +25,7 @@ class CameraManager:
         # older frames are dropped and read() always returns the most recent one.
         gst_elements = [
             f"libcamerasrc ! video/x-raw,width={self.width},height={self.height}",
-            "queue max-size-buffers=1 leachy=downstream", # Low latency queue
+            "queue max-size-buffers=1 leaky=downstream", # Low latency queue
             "videoconvert"
         ]
         
@@ -34,7 +34,7 @@ class CameraManager:
             gst_elements.append(f"videocrop top={t} bottom={b} left={l} right={r}")
             
         gst_elements.append(f"videoscale ! video/x-raw,width={self.target_width},height={self.target_height}")
-        gst_elements.append("queue max-size-buffers=1 leachy=downstream") # Final buffer before app
+        gst_elements.append("queue max-size-buffers=1 leaky=downstream") # Final buffer before app
         gst_elements.append("videoconvert ! video/x-raw,format=BGR ! appsink drop=True max-buffers=1")
         
         self.pipeline = " ! ".join(gst_elements)
@@ -44,7 +44,6 @@ class CameraManager:
         
         if not self.cap.isOpened():
             print("Error: Could not open GStreamer pipeline.", file=sys.stderr)
-            print("Check if 'libcamerasrc' and 'gstreamer1.0-plugins-good' are installed.", file=sys.stderr)
             sys.exit(1)
 
     def get_frame(self):
