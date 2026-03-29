@@ -4,15 +4,15 @@ import sys
 import numpy as np
 
 # Local imports
-from camera_manager import CameraManager
-from ball_detector import BallDetector
+from src.pi.camera.camera_manager import CameraManager
+from src.pi.ball_detection.ball_detector import BallDetector
 
 class SystemManager:
     def __init__(self, mode="CAMERA"):
         self.mode = mode.upper()
         
         # 1. Initialize Camera (Targeting 320x240 for processing efficiency)
-        self.camera = CameraManager(target_width=320, target_height=240, framerate=60)
+        self.camera = CameraManager(target_width=320, target_height=240)
         
         # 2. Initialize Ball Detector (Tune HSV via tools/hsv_range_selector.py)
         # Placeholder HSV values (Red ball example: 0, 100, 100 to 10, 255, 255)
