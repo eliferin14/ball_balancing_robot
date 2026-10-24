@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ball-balancing-robot"
+version = "0.1.0"
+description = "A ball balancing 3-RRS parallel robot control and simulation platform"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Eli Ferin" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: POSIX :: Linux",
+]
+
+# Shared dependencies required both on the PC simulator and on the Raspberry Pi
+dependencies = [
+    "numpy>=2.0.0",
+    "pydantic>=2.0.0",
+    "loguru>=0.7.0",
+    "pyyaml>=6.0.0",
+    "eclipse-zenoh>=1.0.0",
+]
+
+[project.optional-dependencies]
+# PC-specific dependencies for robotics simulation and desktop GUI
+sim = [
+    "scipy>=1.14.0",
+    "matplotlib>=3.9.0",
+    "control>=0.10.0",
+    "spatialmath-python>=1.1.0",
+    "ttkthemes>=3.2.0",
+    "pillow>=10.0.0",
+    "opencv-python>=4.10.0",
+    "ansitable>=0.11.0",
+]
+
+# Raspberry Pi target dependencies (camera streaming, headless runtime, edge drivers)
+pi = [
+    "opencv-python-headless>=4.10.0",
+    "PyGObject>=3.46.0",
+]
+
+# Developer tools for linting, type-checking, and testing
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+    "types-opencv-python>=1.0.0",
+]
+
+# Convenience target to install everything
+all = [
+    "ball-balancing-robot[sim,pi,dev]",
+]
+
+[project.scripts]
+ball-sim = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+
