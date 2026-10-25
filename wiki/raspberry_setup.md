@@ -47,9 +47,14 @@ To set up the Python environment on the Raspberry Pi:
 
 ### Running on Raspberry Pi
 
-Launch the robot managers:
+Launch the robot managers (captures from camera via libcamerasrc):
 ```bash
 python -m src.main --mode pi
+```
+
+To view the live stream remotely from your PC connected to the same network:
+```bash
+python -m src.tools.view_camera --endpoint tcp://<RASPBERRY_IP>:7447
 ```
 
 To stop the system, press **`Ctrl+C`**.

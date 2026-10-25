@@ -3,9 +3,12 @@ from src.managers.base_manager import (
     BaseManager,
     create_zenoh_config,
 )
+from src.managers.camera_manager import CameraManager, CameraSourceType
 
 __all__ = [
-    "DEFAULT_ZENOH_ENDPOINT",
     "BaseManager",
+    "CameraManager",
+    "CameraSourceType",
     "create_zenoh_config",
+    "DEFAULT_ZENOH_ENDPOINT",
 ]
