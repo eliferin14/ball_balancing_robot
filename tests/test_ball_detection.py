@@ -159,6 +159,35 @@ def test_hsv_ball_detector_circularity_filter() -> None:
     assert abs(coords[0] - 160) < 1.5
 
 
+def test_hsv_ball_detector_convex_hull_seals_notch() -> None:
+    """Test that use_convex_hull=True bridges reflections/notches on circle perimeter."""
+    config = HSVDetectorConfig(
+        hue_min=35.0,
+        hue_max=85.0,
+        min_area=50.0,
+        min_circularity=0.6,
+        use_convex_hull=True,
+        closure_kernel_size=3,
+    )
+    detector = HSVBallDetector(config=config)
+
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    hsv_green = np.uint8([[[60, 200, 200]]])
+    bgr_green = cv2.cvtColor(hsv_green, cv2.COLOR_HSV2BGR)[0, 0]
+    color = (int(bgr_green[0]), int(bgr_green[1]), int(bgr_green[2]))
+
+    # Circle radius 20 at (160, 120)
+    cv2.circle(frame, (160, 120), 20, color, -1)
+    # Cut a reflection notch at the top: (156..164, 100..106)
+    cv2.rectangle(frame, (156, 100), (164, 106), (0, 0, 0), -1)
+
+    coords = detector.detect_ball(frame)
+    assert coords is not None
+    # Convex hull must fill the notch in the final mask
+    assert detector._last_mask is not None
+    assert detector._last_mask[103, 160] == 255
+
+
 def test_ball_detection_manager_config_loading() -> None:
     """Test that default ball detector YAML config loads cleanly into Pydantic model."""
     config = load_config(DEFAULT_BALL_DETECTOR_CONFIG_PATH, BallDetectionManagerConfig)
@@ -168,6 +197,7 @@ def test_ball_detection_manager_config_loading() -> None:
     assert config.hsv.closure_kernel_size >= 1
     assert config.hsv.min_area >= 1.0
     assert config.hsv.min_circularity >= 0.0
+    assert isinstance(config.hsv.use_convex_hull, bool)
 
 
 def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None:

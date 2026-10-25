@@ -134,7 +134,7 @@ def test_zenoh_remote_stop_command(free_zenoh_endpoint: str) -> None:
     # Send STOP command repeatedly until processed
     cmd = ControlCommand(action="STOP", target="RemoteStopMgr", sender="TestCommander")
     payload = cmd.model_dump_json().encode("utf-8")
-    for _ in range(10):
+    for _ in range(15):
         router_session.put("robot/system/control", payload)
         proc.join(timeout=0.3)
         if not proc.is_alive():

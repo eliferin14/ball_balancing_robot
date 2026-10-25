@@ -16,5 +16,6 @@ hsv:
   closure_kernel_size: 7
   min_area: 800.0
   min_circularity: 0.5
+  use_convex_hull: true
   path_length: 20
 

@@ -38,6 +38,10 @@ class HSVDetectorConfig(BaseModel):
         le=1.0,
         description="Minimum circularity (4*pi*area / perimeter^2) for the largest component",
     )
+    use_convex_hull: bool = Field(
+        default=True,
+        description="Whether to apply convex hull to seal reflection notches on the ball contour",
+    )
     path_length: int = Field(
         default=20, ge=1, description="Number of past positions retained for debug trail"
     )
@@ -57,7 +61,9 @@ class HSVBallDetector(BallDetectorInterface):
         """
         self.config: HSVDetectorConfig = config if config is not None else HSVDetectorConfig()
         k_size = self.config.closure_kernel_size
-        self._kernel: np.ndarray = np.ones((k_size, k_size), dtype=np.uint8)
+        self._kernel: np.ndarray = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (k_size, k_size)
+        )
         self._path: deque[tuple[float, float] | None] = deque(maxlen=self.config.path_length)
         self._last_mask: np.ndarray | None = None
 
@@ -106,10 +112,10 @@ class HSVBallDetector(BallDetectorInterface):
                 cv2.inRange(hsv, lower2, upper2),
             )
 
-        # Morphological noise cleanup
+        # Morphological opening (removes specks) followed by closing (bridges holes)
         if self.config.closure_kernel_size > 1:
-            mask = cv2.erode(mask, self._kernel)
-            mask = cv2.dilate(mask, self._kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self._kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self._kernel)
 
         # Connected component analysis to isolate and retain only the largest component
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
@@ -126,18 +132,33 @@ class HSVBallDetector(BallDetectorInterface):
             if largest_area >= self.config.min_area:
                 component_mask = ((labels == largest_label).astype(np.uint8) * 255)
 
-                # Circularity validation
+                # Contour extraction
                 contours, _ = cv2.findContours(
                     component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                 )
                 if contours:
                     main_contour = max(contours, key=cv2.contourArea)
+
+                    # Convex hull seals boundary reflection notches
+                    if self.config.use_convex_hull:
+                        main_contour = cv2.convexHull(main_contour)
+                        component_mask = np.zeros_like(mask)
+                        cv2.drawContours(component_mask, [main_contour], -1, 255, -1)
+                        moments = cv2.moments(main_contour)
+                        if moments["m00"] > 0:
+                            largest_area = float(moments["m00"])
+                            cx = float(moments["m10"] / largest_area)
+                            cy = float(moments["m01"] / largest_area)
+                        else:
+                            cx, cy = centroids[largest_label]
+                    else:
+                        cx, cy = centroids[largest_label]
+
                     perimeter = cv2.arcLength(main_contour, closed=True)
                     if perimeter > 0:
                         circularity = (4.0 * np.pi * largest_area) / (perimeter * perimeter)
                         if circularity >= self.config.min_circularity:
                             self._last_mask = component_mask
-                            cx, cy = centroids[largest_label]
                             position = (float(cx), float(cy))
                             self._path.append(position)
                             return position
