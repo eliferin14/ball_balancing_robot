@@ -13,9 +13,10 @@ hsv:
   sat_max: 255.0
   val_min: 20.0
   val_max: 255.0
-  closure_kernel_size: 7
+  closure_kernel_size: 11
   min_area: 800.0
   min_circularity: 0.5
   use_convex_hull: true
+  use_min_enclosing_circle: true
   path_length: 20
 

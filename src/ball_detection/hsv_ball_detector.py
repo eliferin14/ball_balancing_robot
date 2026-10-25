@@ -42,6 +42,10 @@ class HSVDetectorConfig(BaseModel):
         default=True,
         description="Whether to apply convex hull to seal reflection notches on the ball contour",
     )
+    use_min_enclosing_circle: bool = Field(
+        default=True,
+        description="Whether to fit a minimum enclosing circle to estimate the ball center",
+    )
     path_length: int = Field(
         default=20, ge=1, description="Number of past positions retained for debug trail"
     )
@@ -66,6 +70,7 @@ class HSVBallDetector(BallDetectorInterface):
         )
         self._path: deque[tuple[float, float] | None] = deque(maxlen=self.config.path_length)
         self._last_mask: np.ndarray | None = None
+        self._last_circle: tuple[tuple[float, float], float] | None = None
 
     def detect_ball(self, frame: np.ndarray) -> tuple[float, float] | None:
         """
@@ -159,12 +164,22 @@ class HSVBallDetector(BallDetectorInterface):
                         circularity = (4.0 * np.pi * largest_area) / (perimeter * perimeter)
                         if circularity >= self.config.min_circularity:
                             self._last_mask = component_mask
-                            position = (float(cx), float(cy))
+
+                            # Calculate final position: min enclosing circle or centroid
+                            if self.config.use_min_enclosing_circle:
+                                (circle_x, circle_y), radius = cv2.minEnclosingCircle(main_contour)
+                                position = (float(circle_x), float(circle_y))
+                                self._last_circle = (position, float(radius))
+                            else:
+                                position = (float(cx), float(cy))
+                                self._last_circle = None
+
                             self._path.append(position)
                             return position
 
         # No component found or component failed min_area / circularity threshold
         self._last_mask = np.zeros_like(mask)
+        self._last_circle = None
         self._path.append(None)
         return None
 
@@ -192,10 +207,20 @@ class HSVBallDetector(BallDetectorInterface):
 
             # Draw bright green outline border around the detected ball component
             if np.any(mask_indices):
-                contours, _ = cv2.findContours(
-                    self._last_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                )
-                cv2.drawContours(debug_frame, contours, -1, (0, 255, 0), 2)
+                if self.config.use_min_enclosing_circle and self._last_circle is not None:
+                    (cc_x, cc_y), c_rad = self._last_circle
+                    cv2.circle(
+                        debug_frame,
+                        (int(round(cc_x)), int(round(cc_y))),
+                        int(round(c_rad)),
+                        (0, 255, 0),
+                        2,
+                    )
+                else:
+                    contours, _ = cv2.findContours(
+                        self._last_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                    )
+                    cv2.drawContours(debug_frame, contours, -1, (0, 255, 0), 2)
 
         # Draw trajectory trail
         path_len = len(self._path)

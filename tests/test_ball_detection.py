@@ -188,6 +188,37 @@ def test_hsv_ball_detector_convex_hull_seals_notch() -> None:
     assert detector._last_mask[103, 160] == 255
 
 
+def test_hsv_ball_detector_min_enclosing_circle() -> None:
+    """Test that use_min_enclosing_circle=True returns the geometric circle center."""
+    config = HSVDetectorConfig(
+        hue_min=35.0,
+        hue_max=85.0,
+        min_area=50.0,
+        use_convex_hull=True,
+        use_min_enclosing_circle=True,
+        closure_kernel_size=3,
+    )
+    detector = HSVBallDetector(config=config)
+
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    hsv_green = np.uint8([[[60, 200, 200]]])
+    bgr_green = cv2.cvtColor(hsv_green, cv2.COLOR_HSV2BGR)[0, 0]
+    color = (int(bgr_green[0]), int(bgr_green[1]), int(bgr_green[2]))
+
+    # True geometric circle at (150, 110) of radius 18
+    cv2.circle(frame, (150, 110), 18, color, -1)
+    coords = detector.detect_ball(frame)
+    assert coords is not None
+    assert abs(coords[0] - 150.0) < 1.0
+    assert abs(coords[1] - 110.0) < 1.0
+    assert detector._last_circle is not None
+    assert abs(detector._last_circle[1] - 18.0) < 1.5
+
+    # Verify debug frame renders without error
+    debug = detector.draw_debug_frame(frame)
+    assert debug.shape == (240, 320, 3)
+
+
 def test_ball_detection_manager_config_loading() -> None:
     """Test that default ball detector YAML config loads cleanly into Pydantic model."""
     config = load_config(DEFAULT_BALL_DETECTOR_CONFIG_PATH, BallDetectionManagerConfig)
@@ -198,6 +229,7 @@ def test_ball_detection_manager_config_loading() -> None:
     assert config.hsv.min_area >= 1.0
     assert config.hsv.min_circularity >= 0.0
     assert isinstance(config.hsv.use_convex_hull, bool)
+    assert isinstance(config.hsv.use_min_enclosing_circle, bool)
 
 
 def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None:
@@ -253,12 +285,13 @@ def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None
             source_type="test",
         )
 
-        frame_pub.put(bytes(frame.tobytes()), attachment=meta.model_dump_json().encode("utf-8"))
-
+        # Allow Zenoh subscriber discovery to complete, then publish and step
+        time.sleep(0.1)
         deadline = time.time() + 3.0
         while len(received_positions) == 0 and time.time() < deadline:
+            frame_pub.put(bytes(frame.tobytes()), attachment=meta.model_dump_json().encode("utf-8"))
             manager.step()
-            time.sleep(0.02)
+            time.sleep(0.05)
 
         assert len(received_positions) > 0
         last_pos = received_positions[-1]
