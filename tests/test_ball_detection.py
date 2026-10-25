@@ -7,7 +7,10 @@ import zenoh
 
 from src.ball_detection.hsv_ball_detector import HSVBallDetector, HSVDetectorConfig
 from src.common.config import load_config
-from src.common.paths import DEFAULT_BALL_DETECTOR_CONFIG_PATH
+from src.common.paths import (
+    DEBUG_VIDEO_DIR,
+    DEFAULT_BALL_DETECTOR_CONFIG_PATH,
+)
 from src.managers.ball_detection_manager import (
     BallDetectionManager,
     BallDetectionManagerConfig,
@@ -230,6 +233,62 @@ def test_ball_detection_manager_config_loading() -> None:
     assert config.hsv.min_circularity >= 0.0
     assert isinstance(config.hsv.use_convex_hull, bool)
     assert isinstance(config.hsv.use_min_enclosing_circle, bool)
+    assert hasattr(config, "save_debug_video")
+
+
+def test_ball_detection_manager_save_debug_video(free_zenoh_endpoint: str) -> None:
+    """Test that BallDetectionManager writes debug frames to video file in DEBUG_VIDEO_DIR."""
+    test_endpoint = free_zenoh_endpoint
+    router_session = zenoh.open(create_zenoh_config("router", test_endpoint))
+
+    video_fname = "test_unit_debug.mp4"
+    mgr_config = BallDetectionManagerConfig(
+        input_frame_topic="robot/camera/frame_vid_test",
+        output_position_topic="robot/ball/pos_vid_test",
+        strategy="hsv",
+        save_debug_video=True,
+        debug_video_filename=video_fname,
+        display_debug_window=False,
+        zenoh_endpoint=test_endpoint,
+    )
+    manager = BallDetectionManager(config=mgr_config, name="TestVidMgr")
+    manager._session = zenoh.open(create_zenoh_config("client", test_endpoint))
+    manager.setup()
+
+    frame_pub_session = zenoh.open(create_zenoh_config("client", test_endpoint))
+    frame_pub = frame_pub_session.declare_publisher("robot/camera/frame_vid_test")
+
+    try:
+        frame = np.zeros((240, 320, 3), dtype=np.uint8)
+        meta = FrameMetadata(
+            frame_id=1,
+            width=320,
+            height=240,
+            channels=3,
+            format="BGR",
+            source_type="test",
+        )
+        time.sleep(0.1)
+        frame_pub.put(bytes(frame.tobytes()), attachment=meta.model_dump_json().encode("utf-8"))
+
+        deadline = time.time() + 2.0
+        while manager._video_writer is None and time.time() < deadline:
+            manager.step()
+            time.sleep(0.05)
+
+        assert manager._video_writer is not None
+
+    finally:
+        manager.teardown()
+        frame_pub.undeclare()
+        frame_pub_session.close()
+        router_session.close()
+
+    expected_file = DEBUG_VIDEO_DIR / video_fname
+    assert expected_file.exists()
+    assert expected_file.stat().st_size > 0
+    # Clean up test file
+    expected_file.unlink(missing_ok=True)
 
 
 def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None:

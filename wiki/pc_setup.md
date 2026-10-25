@@ -26,9 +26,14 @@ When the Raspberry Pi is running in hardware mode (`python -m src.main --mode pi
 
 ### Run Ball Detection with Live Debug Window:
 ```bash
+# Live debug window on screen
 python -m src.main --mode pc-proc --zenoh-endpoint tcp://<RASPBERRY_IP>:7447 --debug-window
+
+# Live debug window + record video to data/debug_video/
+python -m src.main --mode pc-proc --zenoh-endpoint tcp://<RASPBERRY_IP>:7447 --debug-window --save-video
 ```
 
+- **Saved Video**: When `--save-video` is enabled (or `save_debug_video: true` in the YAML config), timestamped MP4 files (e.g. `ball_debug_20261025_190000.mp4`) are saved to `data/debug_video/`.
 - **Zero Latency**: Frame delivery is decoupled from processing so incoming frames are never queued.
 - **Selective Color Overlay**: The entire scene is shown in Black & White (grayscale) except for the largest connected component of the detected ball, which remains in full color.
 - **Tracking Visuals**: Green tracking circle, red centroid dot, position coordinates `(x, y)`, and past trajectory motion path are drawn directly on screen.

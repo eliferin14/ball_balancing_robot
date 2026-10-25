@@ -4,6 +4,7 @@ output_position_topic: "robot/ball/position"
 strategy: "hsv"
 display_debug_window: false
 debug_window_name: "Ball Detection Debug"
+save_debug_video: false
 
 # Parameters for HSV color thresholding strategy (Green filter)
 hsv:

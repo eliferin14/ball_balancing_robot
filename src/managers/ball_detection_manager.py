@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from pydantic import BaseModel, Field
 from src.ball_detection.ball_detector_interface import BallDetectorInterface
 from src.ball_detection.hsv_ball_detector import HSVBallDetector, HSVDetectorConfig
 from src.common.config import load_config
-from src.common.paths import DEFAULT_BALL_DETECTOR_CONFIG_PATH
+from src.common.paths import DEBUG_VIDEO_DIR, DEFAULT_BALL_DETECTOR_CONFIG_PATH
 from src.managers.base_manager import DEFAULT_ZENOH_ENDPOINT, BaseManager
 from src.messages.ball import BALL_POSITION_TOPIC, BallPosition
 from src.messages.camera import CAMERA_FRAME_TOPIC, FrameMetadata
@@ -40,6 +41,14 @@ class BallDetectionManagerConfig(BaseModel):
     debug_window_name: str = Field(
         default="Ball Detection Debug",
         description="Window title for OpenCV debug visualization",
+    )
+    save_debug_video: bool = Field(
+        default=False,
+        description="Whether to record and save the debug video stream to file in data/debug_video",
+    )
+    debug_video_filename: str | None = Field(
+        default=None,
+        description="Optional custom filename for saved video; auto-generates timestamp if None",
     )
     hsv: HSVDetectorConfig = Field(
         default_factory=HSVDetectorConfig,
@@ -116,6 +125,9 @@ class BallDetectionManager(BaseManager):
         self._subscriber: zenoh.Subscriber | None = None
         self._publisher: zenoh.Publisher | None = None
 
+        # Video recording
+        self._video_writer: cv2.VideoWriter | None = None
+
     def __getstate__(self) -> dict[str, Any]:
         """Strip runtime synchronization and network handles before pickle spawn."""
         state = super().__getstate__()
@@ -124,6 +136,7 @@ class BallDetectionManager(BaseManager):
         state["_subscriber"] = None
         state["_publisher"] = None
         state["detector"] = None
+        state["_video_writer"] = None
         return state
 
     def setup(self) -> None:
@@ -211,13 +224,35 @@ class BallDetectionManager(BaseManager):
 
             self._publisher.put(pos_msg.model_dump_json())
 
-            if self.config.display_debug_window:
+            if self.config.display_debug_window or self.config.save_debug_video:
                 debug_frame = self.detector.draw_debug_frame(frame)
-                cv2.imshow(self.config.debug_window_name, debug_frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q") or key == 27:
-                    self.logger.info("Quit key pressed in debug window. Stopping manager...")
-                    self.stop()
+
+                if self.config.save_debug_video:
+                    if self._video_writer is None:
+                        DEBUG_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+                        if self.config.debug_video_filename:
+                            fname = self.config.debug_video_filename
+                            if not fname.endswith((".mp4", ".avi")):
+                                fname += ".mp4"
+                        else:
+                            ts = time.strftime("%Y%m%d_%H%M%S")
+                            fname = f"ball_debug_{ts}.mp4"
+
+                        video_path = DEBUG_VIDEO_DIR / fname
+                        h, w = debug_frame.shape[:2]
+                        fps = 30.0
+                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                        self._video_writer = cv2.VideoWriter(str(video_path), fourcc, fps, (w, h))
+                        self.logger.info(f"Recording debug video to {video_path}")
+
+                    self._video_writer.write(debug_frame)
+
+                if self.config.display_debug_window:
+                    cv2.imshow(self.config.debug_window_name, debug_frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("q") or key == 27:
+                        self.logger.info("Quit key pressed in debug window. Stopping manager...")
+                        self.stop()
 
         except Exception as err:
             self.logger.error(f"Error processing camera frame sample: {err}")
@@ -229,8 +264,13 @@ class BallDetectionManager(BaseManager):
             self._new_frame_event.set()
 
     def teardown(self) -> None:
-        """Release Zenoh subscriber, publisher, and OpenCV debug windows."""
+        """Release Zenoh subscriber, publisher, video writer, and OpenCV debug windows."""
         self.logger.info("Tearing down BallDetectionManager...")
+        if self._video_writer is not None:
+            self.logger.info("Releasing debug video writer...")
+            self._video_writer.release()
+            self._video_writer = None
+
         if self._subscriber is not None:
             self._subscriber.undeclare()
             self._subscriber = None

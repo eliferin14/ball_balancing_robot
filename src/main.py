@@ -244,6 +244,11 @@ def main() -> None:
         action="store_true",
         help="Enable OpenCV debug window in BallDetectionManager",
     )
+    parser.add_argument(
+        "--save-video",
+        action="store_true",
+        help="Record and save debug video stream to data/debug_video",
+    )
     args = parser.parse_args()
 
     # Configure root loguru formatting
@@ -270,6 +275,8 @@ def main() -> None:
         mgr.zenoh_endpoint = endpoint
         if args.debug_window and isinstance(mgr, BallDetectionManager):
             mgr.config.display_debug_window = True
+        if args.save_video and isinstance(mgr, BallDetectionManager):
+            mgr.config.save_debug_video = True
 
     is_local = "127.0.0.1" in endpoint or "localhost" in endpoint
     start_router = (args.mode != "pc-proc") and is_local
