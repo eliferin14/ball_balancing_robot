@@ -206,7 +206,7 @@ class CameraManager(BaseManager):
             # Publish raw frame buffer as payload with metadata JSON in Zenoh attachment
             if self._frame_publisher is not None:
                 meta_bytes = meta.model_dump_json().encode("utf-8")
-                self._frame_publisher.put(mapinfo.data, attachment=meta_bytes)
+                self._frame_publisher.put(bytes(mapinfo.data), attachment=meta_bytes)
         finally:
             buf.unmap(mapinfo)
 
