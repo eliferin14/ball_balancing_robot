@@ -42,9 +42,9 @@ def test_manager_lifecycle_in_thread() -> None:
     assert mgr.is_stopped() is True
 
 
-def test_pydantic_zenoh_message_exchange() -> None:
+def test_pydantic_zenoh_message_exchange(free_zenoh_endpoint: str) -> None:
     """Test publishing and subscribing to typed Pydantic models over Zenoh."""
-    test_endpoint = "tcp/127.0.0.1:7481"
+    test_endpoint = free_zenoh_endpoint
     router_session = zenoh.open(create_zenoh_config("router", test_endpoint))
 
     received_messages: list[TelemetryMessage] = []
@@ -112,9 +112,9 @@ def test_multiprocess_stop_event() -> None:
     assert proc.exitcode == 0
 
 
-def test_zenoh_remote_stop_command() -> None:
+def test_zenoh_remote_stop_command(free_zenoh_endpoint: str) -> None:
     """Test that a manager stops when receiving a Zenoh ControlCommand STOP."""
-    test_endpoint = "tcp/127.0.0.1:7482"
+    test_endpoint = free_zenoh_endpoint
     router_session = zenoh.open(create_zenoh_config("router", test_endpoint))
 
     ctx = mp.get_context("spawn")
@@ -131,15 +131,16 @@ def test_zenoh_remote_stop_command() -> None:
     time.sleep(0.5)
     assert proc.is_alive()
 
-    # Send STOP command via the router session
-    try:
-        cmd = ControlCommand(action="STOP", target="RemoteStopMgr", sender="TestCommander")
-        payload = cmd.model_dump_json().encode("utf-8")
+    # Send STOP command repeatedly until processed
+    cmd = ControlCommand(action="STOP", target="RemoteStopMgr", sender="TestCommander")
+    payload = cmd.model_dump_json().encode("utf-8")
+    for _ in range(10):
         router_session.put("robot/system/control", payload)
-    finally:
-        pass
+        proc.join(timeout=0.3)
+        if not proc.is_alive():
+            break
 
-    proc.join(timeout=4.0)
+    proc.join(timeout=2.0)
     assert not proc.is_alive()
     assert proc.exitcode == 0
 
