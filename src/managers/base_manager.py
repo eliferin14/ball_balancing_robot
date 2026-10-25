@@ -20,6 +20,8 @@ from src.messages.system import ControlCommand, ManagerState, ManagerStatus
 
 if TYPE_CHECKING:
     from loguru import Logger
+else:
+    Logger = Any
 
 T = TypeVar("T", bound=BaseModel)
 
