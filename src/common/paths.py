@@ -7,6 +7,9 @@ SRC_DIR = PROJECT_ROOT / "src"
 
 # --- Configs dir ---
 CONFIG_DIR = SRC_DIR / "config"
+CAMERA_CONFIG_DIR = CONFIG_DIR / "camera"
+SIM_CAMERA_CONFIG_PATH = CAMERA_CONFIG_DIR / "sim.yaml"
+REAL_CAMERA_CONFIG_PATH = CAMERA_CONFIG_DIR / "real.yaml"
 
 
 if __name__ == "__main__":

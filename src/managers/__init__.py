@@ -3,10 +3,11 @@ from src.managers.base_manager import (
     BaseManager,
     create_zenoh_config,
 )
-from src.managers.camera_manager import CameraManager, CameraSourceType
+from src.managers.camera_manager import CameraConfig, CameraManager, CameraSourceType
 
 __all__ = [
     "BaseManager",
+    "CameraConfig",
     "CameraManager",
     "CameraSourceType",
     "create_zenoh_config",

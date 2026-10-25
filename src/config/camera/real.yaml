@@ -1,0 +1,9 @@
+# Real camera configuration using libcamerasrc or v4l2 device
+output_frame_topic: "robot/camera/frame"
+source_type: "real"
+width: 320
+height: 240
+framerate: 30
+device: null
+loop_rate_hz: 60.0
+

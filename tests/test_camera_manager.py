@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -6,19 +7,19 @@ import pytest
 import zenoh
 
 from src.managers.base_manager import create_zenoh_config
-from src.managers.camera_manager import CameraManager, CameraSourceType
+from src.managers.camera_manager import CameraConfig, CameraManager, CameraSourceType
 from src.messages.camera import FrameMetadata
 
 
 def test_camera_manager_videotestsrc_frame_capture() -> None:
     """Test that CameraManager captures frames using videotestsrc and increments frame_id."""
-    cam = CameraManager(
-        name="TestCam",
+    cfg = CameraConfig(
         source_type=CameraSourceType.TEST,
         width=320,
         height=240,
         framerate=30,
     )
+    cam = CameraManager(config=cfg, name="TestCam")
     cam.setup()
     try:
         assert cam._frame_id == 0
@@ -40,14 +41,14 @@ def test_camera_manager_zenoh_shm_frame_publication(free_zenoh_endpoint: str) ->
 
     received_frames: List[tuple[np.ndarray, FrameMetadata]] = []
 
-    cam = CameraManager(
-        name="PubCam",
+    cfg = CameraConfig(
         source_type=CameraSourceType.TEST,
         width=320,
         height=240,
         framerate=30,
         zenoh_endpoint=test_endpoint,
     )
+    cam = CameraManager(config=cfg, name="PubCam")
 
     receiver_session = zenoh.open(create_zenoh_config("client", test_endpoint))
 
@@ -99,10 +100,10 @@ def test_camera_manager_zenoh_shm_frame_publication(free_zenoh_endpoint: str) ->
 
 def test_camera_manager_invalid_source_fails() -> None:
     """Test that CameraManager raises FileNotFoundError for non-existent video files."""
-    cam = CameraManager(
-        name="FailCam",
+    cfg = CameraConfig(
         source_type=CameraSourceType.FILE,
-        file_path="/non_existent/path/video.mp4",
+        file_path=Path("/non_existent/path/video.mp4"),
     )
+    cam = CameraManager(config=cfg, name="FailCam")
     with pytest.raises(FileNotFoundError):
         cam.setup()

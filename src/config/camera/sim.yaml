@@ -1,0 +1,8 @@
+# Simulation camera configuration using videotestsrc
+output_frame_topic: "robot/camera/frame"
+source_type: "test"
+width: 320
+height: 240
+framerate: 30
+loop_rate_hz: 60.0
+

@@ -10,12 +10,13 @@ from types import FrameType
 import zenoh
 from loguru import logger
 
+from src.common.paths import REAL_CAMERA_CONFIG_PATH, SIM_CAMERA_CONFIG_PATH
 from src.managers.base_manager import (
     DEFAULT_ZENOH_ENDPOINT,
     BaseManager,
     create_zenoh_config,
 )
-from src.managers.camera_manager import CameraManager, CameraSourceType
+from src.managers.camera_manager import CameraManager
 from src.managers.dummy_managers import DummyConsumerManager, DummyProducerManager
 from src.messages.system import ControlCommand
 
@@ -156,18 +157,12 @@ class ManagerOrchestrator:
         logger.info("All manager processes stopped cleanly.")
 
 
-def build_managers_for_mode(
-    mode: str,
-    camera_source: str = "test",
-    video_file: str | None = None,
-) -> list[BaseManager]:
+def build_managers_for_mode(mode: str) -> list[BaseManager]:
     """
     Factory function to instantiate the managers required for a given execution mode.
 
     Args:
         mode: Execution mode ('demo', 'sim', 'pi').
-        camera_source: Source type for CameraManager ('test', 'real', 'file').
-        video_file: Path to video file if camera_source is 'file'.
 
     Returns:
         List of configured BaseManager instances.
@@ -178,29 +173,15 @@ def build_managers_for_mode(
             DummyConsumerManager(name="Consumer-1", loop_rate_hz=2.0),
         ]
     elif mode == "sim":
-        logger.info("Initializing simulation managers with CameraManager...")
-        resolved_src = CameraSourceType.FILE if video_file else CameraSourceType(camera_source)
+        logger.info("Initializing simulation managers with CameraManager (sim.yaml)...")
         return [
-            CameraManager(
-                name="CameraManager",
-                source_type=resolved_src,
-                file_path=video_file,
-                width=320,
-                height=240,
-                framerate=30,
-            ),
+            CameraManager(config=SIM_CAMERA_CONFIG_PATH),
             DummyConsumerManager(name="SimController", loop_rate_hz=10.0),
         ]
     elif mode == "pi":
-        logger.info("Initializing Raspberry Pi hardware managers...")
+        logger.info("Initializing Raspberry Pi hardware managers (real.yaml)...")
         return [
-            CameraManager(
-                name="CameraManager",
-                source_type=CameraSourceType.REAL,
-                width=320,
-                height=240,
-                framerate=30,
-            ),
+            CameraManager(config=REAL_CAMERA_CONFIG_PATH),
             DummyConsumerManager(name="PiMotorActuator", loop_rate_hz=50.0),
         ]
     else:
@@ -215,17 +196,6 @@ def main() -> None:
         choices=["demo", "sim", "pi"],
         default="demo",
         help="System runtime mode (default: demo)",
-    )
-    parser.add_argument(
-        "--camera-source",
-        choices=["test", "real", "file"],
-        default="test",
-        help="Camera input source for CameraManager (default: test)",
-    )
-    parser.add_argument(
-        "--video-file",
-        default=None,
-        help="Path to video file when camera-source is file",
     )
     parser.add_argument(
         "--zenoh-endpoint",
@@ -250,11 +220,7 @@ def main() -> None:
     logger.info(
         f"Ball Balancing Robot launching in '{args.mode}' mode (PID {os.getpid()})..."
     )
-    managers = build_managers_for_mode(
-        mode=args.mode,
-        camera_source=args.camera_source,
-        video_file=args.video_file,
-    )
+    managers = build_managers_for_mode(mode=args.mode)
     orchestrator = ManagerOrchestrator(
         managers=managers,
         zenoh_endpoint=args.zenoh_endpoint,

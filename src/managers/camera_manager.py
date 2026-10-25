@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import zenoh
+from pydantic import BaseModel, Field
 
+from src.common.config import load_config
+from src.common.paths import SIM_CAMERA_CONFIG_PATH
 from src.managers.base_manager import DEFAULT_ZENOH_ENDPOINT, BaseManager
 from src.messages.camera import CAMERA_FRAME_TOPIC, FrameMetadata
 
@@ -16,6 +19,32 @@ class CameraSourceType(StrEnum):
     REAL = "real"
     TEST = "test"
     FILE = "file"
+
+
+class CameraConfig(BaseModel):
+    """Configuration model for CameraManager."""
+
+    output_frame_topic: str = Field(
+        default=CAMERA_FRAME_TOPIC,
+        description="Zenoh topic on which raw camera frames are published",
+    )
+    source_type: CameraSourceType = Field(
+        default=CameraSourceType.TEST,
+        description="Video input source type ('real', 'test', 'file')",
+    )
+    width: int = Field(default=320, description="Output frame width in pixels")
+    height: int = Field(default=240, description="Output frame height in pixels")
+    framerate: int = Field(default=30, description="Acquisition framerate")
+    device: str | None = Field(default=None, description="V4L2 device path if using v4l2src")
+    file_path: Path | None = Field(default=None, description="Video file path if using filesrc")
+    loop_rate_hz: float | None = Field(
+        default=60.0, description="Step loop polling rate (set above framerate to prevent lag)"
+    )
+    log_file: Path | None = Field(default=None, description="Optional log file path")
+    zenoh_mode: str = Field(default="client", description="Zenoh session mode ('client', 'peer')")
+    zenoh_endpoint: str | None = Field(
+        default=DEFAULT_ZENOH_ENDPOINT, description="Zenoh router TCP endpoint"
+    )
 
 
 class CameraManager(BaseManager):
@@ -29,50 +58,36 @@ class CameraManager(BaseManager):
 
     def __init__(
         self,
+        config: CameraConfig | Path | str | None = None,
         name: str = "CameraManager",
-        source_type: CameraSourceType | str = CameraSourceType.TEST,
-        width: int = 320,
-        height: int = 240,
-        framerate: int = 30,
-        device: str | None = None,
-        file_path: str | Path | None = None,
-        topic: str = CAMERA_FRAME_TOPIC,
-        loop_rate_hz: float | None = 60.0,
-        log_file: Path | None = None,
-        zenoh_mode: str = "client",
-        zenoh_endpoint: str | None = DEFAULT_ZENOH_ENDPOINT,
     ) -> None:
         """
-        Initialize CameraManager.
+        Initialize CameraManager using a CameraConfig instance, path to a YAML file, or None.
 
         Args:
+            config: CameraConfig object, Path or str pointing to a YAML config file, or None.
             name: Manager name identifier.
-            source_type: 'real', 'test', or 'file'.
-            width: Output frame width in pixels.
-            height: Output frame height in pixels.
-            framerate: Camera acquisition framerate.
-            device: V4L2 device path (e.g. '/dev/video0') or None for auto/libcamerasrc.
-            file_path: Video file path if source_type is 'file'.
-            topic: Zenoh topic on which to publish frames.
-            loop_rate_hz: Rate of step polling loop (set above framerate to prevent lag).
-            log_file: Optional log file path.
-            zenoh_mode: Zenoh mode ('client', 'peer', 'router').
-            zenoh_endpoint: Zenoh router TCP endpoint.
         """
+        if config is None:
+            resolved_config = load_config(SIM_CAMERA_CONFIG_PATH, CameraConfig)
+        elif isinstance(config, (Path, str)):
+            resolved_config = load_config(config, CameraConfig)
+        elif isinstance(config, CameraConfig):
+            resolved_config = config
+        else:
+            raise TypeError(
+                f"Expected CameraConfig, Path, str, or None, got {type(config).__name__}"
+            )
+
         super().__init__(
             name=name,
-            loop_rate_hz=loop_rate_hz,
-            log_file=log_file,
-            zenoh_mode=zenoh_mode,
-            zenoh_endpoint=zenoh_endpoint,
+            loop_rate_hz=resolved_config.loop_rate_hz,
+            log_file=resolved_config.log_file,
+            zenoh_mode=resolved_config.zenoh_mode,
+            zenoh_endpoint=resolved_config.zenoh_endpoint,
         )
-        self.source_type: CameraSourceType = CameraSourceType(source_type)
-        self.width: int = width
-        self.height: int = height
-        self.framerate: int = framerate
-        self.device: str | None = device
-        self.file_path: Path | None = Path(file_path).resolve() if file_path is not None else None
-        self.topic: str = topic
+        self.config: CameraConfig = resolved_config
+        self.topic: str = resolved_config.output_frame_topic
 
         # Runtime state (initialized in child process during setup)
         self._pipeline: Any = None
@@ -89,48 +104,49 @@ class CameraManager(BaseManager):
         return state
 
     def _build_pipeline_str(self) -> str:
-        """Construct the appropriate GStreamer pipeline string."""
-        caps = f"video/x-raw,format=BGR,width={self.width},height={self.height}"
+        """Construct the appropriate GStreamer pipeline string from self.config."""
+        caps = f"video/x-raw,format=BGR,width={self.config.width},height={self.config.height}"
         sink_elem = "appsink name=sink emit-signals=true drop=true max-buffers=1 sync=false"
 
-        if self.source_type == CameraSourceType.TEST:
+        if self.config.source_type == CameraSourceType.TEST:
             return (
                 f"videotestsrc is-live=true ! "
-                f"video/x-raw,framerate={self.framerate}/1 ! "
+                f"video/x-raw,framerate={self.config.framerate}/1 ! "
                 f"videoscale ! {caps} ! "
                 f"videoconvert ! {caps} ! "
                 f"{sink_elem}"
             )
 
-        if self.source_type == CameraSourceType.FILE:
-            if self.file_path is None or not self.file_path.exists():
-                raise FileNotFoundError(f"Video file does not exist: {self.file_path}")
+        if self.config.source_type == CameraSourceType.FILE:
+            file_path = self.config.file_path.resolve() if self.config.file_path else None
+            if file_path is None or not file_path.exists():
+                raise FileNotFoundError(f"Video file does not exist: {file_path}")
             return (
-                f'filesrc location="{self.file_path}" ! '
+                f'filesrc location="{file_path}" ! '
                 f"decodebin ! videoconvert ! videoscale ! {caps} ! "
                 f"{sink_elem}"
             )
 
-        if self.source_type == CameraSourceType.REAL:
-            if self.device is not None:
-                if not os.path.exists(self.device):
-                    raise FileNotFoundError(f"V4L2 camera device not found: {self.device}")
+        if self.config.source_type == CameraSourceType.REAL:
+            if self.config.device is not None:
+                if not os.path.exists(self.config.device):
+                    raise FileNotFoundError(f"V4L2 camera device not found: {self.config.device}")
                 return (
-                    f"v4l2src device={self.device} ! "
-                    f"video/x-raw,framerate={self.framerate}/1 ! "
+                    f"v4l2src device={self.config.device} ! "
+                    f"video/x-raw,framerate={self.config.framerate}/1 ! "
                     f"videoconvert ! videoscale ! {caps} ! "
                     f"{sink_elem}"
                 )
             # Default Raspberry Pi camera using libcamerasrc
             return (
                 f"libcamerasrc ! "
-                f"video/x-raw,width={self.width},height={self.height},"
-                f"framerate={self.framerate}/1 ! "
+                f"video/x-raw,width={self.config.width},height={self.config.height},"
+                f"framerate={self.config.framerate}/1 ! "
                 f"videoconvert ! {caps} ! "
                 f"{sink_elem}"
             )
 
-        raise ValueError(f"Unsupported CameraSourceType: {self.source_type}")
+        raise ValueError(f"Unsupported CameraSourceType: {self.config.source_type}")
 
     def setup(self) -> None:
         """Initialize GStreamer pipeline and Zenoh publisher."""
@@ -156,8 +172,9 @@ class CameraManager(BaseManager):
 
         # Declare publisher on the frame topic
         if self._session is not None:
-            self._frame_publisher = self._session.declare_publisher(self.topic)
-            self.logger.info(f"Zenoh frame publisher declared on '{self.topic}'.")
+            topic = self.config.output_frame_topic
+            self._frame_publisher = self._session.declare_publisher(topic)
+            self.logger.info(f"Zenoh frame publisher declared on '{topic}'.")
 
         # Start GStreamer pipeline
         ret = self._pipeline.set_state(Gst.State.PLAYING)
@@ -176,7 +193,7 @@ class CameraManager(BaseManager):
         sample = self._sink.emit("pull-sample")
         if sample is None:
             # Handle End of Stream (EOS) for file playback: loop back to beginning
-            if self.source_type == CameraSourceType.FILE and self._pipeline is not None:
+            if self.config.source_type == CameraSourceType.FILE and self._pipeline is not None:
                 self.logger.debug("Reached EOS in video file, looping back to start...")
                 self._pipeline.seek_simple(
                     Gst.Format.TIME,
@@ -199,11 +216,11 @@ class CameraManager(BaseManager):
             self._frame_id += 1
             meta = FrameMetadata(
                 frame_id=self._frame_id,
-                width=self.width,
-                height=self.height,
+                width=self.config.width,
+                height=self.config.height,
                 channels=3,
                 format="BGR",
-                source_type=str(self.source_type),
+                source_type=str(self.config.source_type),
             )
 
             # Publish raw frame buffer as payload with metadata JSON in Zenoh attachment
