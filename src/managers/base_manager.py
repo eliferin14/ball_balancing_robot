@@ -39,7 +39,9 @@ def create_zenoh_config(
     conf = zenoh.Config()
     conf.insert_json5("mode", f'"{mode}"')
     if mode == "router" and endpoint:
-        conf.insert_json5("listen/endpoints", f'["{endpoint}"]')
+        # Bind router to all interfaces so remote network clients (e.g. PC viewer) can connect
+        listen_ep = endpoint.replace("127.0.0.1", "0.0.0.0")
+        conf.insert_json5("listen/endpoints", f'["{listen_ep}"]')
     elif mode in ("peer", "client") and endpoint:
         conf.insert_json5("connect/endpoints", f'["{endpoint}"]')
     return conf
