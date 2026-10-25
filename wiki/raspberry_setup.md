@@ -45,3 +45,13 @@ To set up the Python environment on the Raspberry Pi:
    pip install -e ".[pi]"
    ```
 
+### Running on Raspberry Pi
+
+Launch the robot managers:
+```bash
+python -m src.main --mode pi
+```
+
+To stop the system, press **`Ctrl+C`**.
+
+

@@ -1,5 +1,8 @@
 # Ball Balancing Robot
 
-## Raspberry Pi configuration
+A ball balancing 3-RRS parallel robot control and simulation platform.
 
-See [raspberry_setup.md](wiki/raspberry_setup.md)
+## Documentation
+
+- [PC Setup & Usage](wiki/pc_setup.md)
+- [Raspberry Pi Setup & Usage](wiki/raspberry_setup.md)
