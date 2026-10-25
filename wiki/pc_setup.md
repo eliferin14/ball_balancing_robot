@@ -1,6 +1,8 @@
-# PC Setup & Usage
+# PC Setup, Vision Processing & Debug Guide
 
-Instructions to set up and run the simulation environment, camera stream, and tests on a development PC.
+Instructions to set up and run the simulation environment, offload vision processing from the Raspberry Pi, and inspect real-time ball detection on your development PC.
+
+---
 
 ## 1. Virtual Environment Setup
 
@@ -16,45 +18,86 @@ Instructions to set up and run the simulation environment, camera stream, and te
    pip install -e ".[sim,dev]"
    ```
 
-## 2. Running the System
+---
 
-Launch the multi-process orchestrator from the project root:
+## 2. Remote Processing & Live Debug Visualization (PC + Raspberry Pi)
 
+When the Raspberry Pi is running in hardware mode (`python -m src.main --mode pi-hw`), you can offload vision detection and motor control to your PC.
+
+### Run Ball Detection with Live Debug Window:
 ```bash
-# Demo mode (default: producer/consumer test over Zenoh)
-python -m src.main --mode demo
-
-# Simulation mode (runs CameraManager with videotestsrc by default)
-python -m src.main --mode sim
-
-# Simulation mode with video file
-python -m src.main --mode sim --video-file videos/test_hw_enc.mp4
-
-# Or via the CLI entrypoint
-ball-sim
+python -m src.main --mode pc-proc --zenoh-endpoint tcp://<RASPBERRY_IP>:7447 --debug-window
 ```
 
-To stop the system, press **`Ctrl+C`**.
+- **Zero Latency**: Frame delivery is decoupled from processing so incoming frames are never queued.
+- **Selective Color Overlay**: The entire scene is shown in Black & White (grayscale) except for the largest connected component of the detected ball, which remains in full color.
+- **Tracking Visuals**: Green tracking circle, red centroid dot, position coordinates `(x, y)`, and past trajectory motion path are drawn directly on screen.
+- Press **`q`** in the OpenCV window or **`Ctrl+C`** in the terminal to exit cleanly.
 
-## 3. Viewing the Live Camera Stream
+---
 
-In a separate terminal (with the venv activated), run the standalone OpenCV viewer:
+## 3. Local Simulation Mode
+
+To test full end-to-end vision and control purely on your PC without hardware:
 
 ```bash
+python -m src.main --mode sim --debug-window
+```
+*Uses synthetic `videotestsrc` frames (or a custom video file specified in `src/config/camera/sim.yaml`).*
+
+---
+
+## 4. Standalone Raw Camera Stream Viewer
+
+If you only want to inspect the camera angle and raw video feed without running the ball detector:
+
+```bash
+# Connect to Raspberry Pi stream
+python -m src.tools.view_camera --endpoint tcp://<RASPBERRY_IP>:7447
+
+# Or view local simulation stream
 python -m src.tools.view_camera
 ```
 
-Press **`q`** inside the display window to close the viewer.
+---
 
-## 4. Running Tests
+## 5. Ball Detector Configuration
 
-Run the test suite:
+All detection parameters are centralized in `src/config/ball_detector/default.yaml`:
+
+```yaml
+input_frame_topic: "robot/camera/frame"
+output_position_topic: "robot/ball/position"
+strategy: "hsv"
+display_debug_window: false
+debug_window_name: "Ball Detection Debug"
+
+# Parameters for HSV color thresholding strategy (Green filter)
+hsv:
+  hue_min: 35.0
+  hue_max: 85.0
+  sat_min: 50.0
+  sat_max: 255.0
+  val_min: 50.0
+  val_max: 255.0
+  closure_kernel_size: 5
+  min_area: 20.0       # Minimum pixel area for largest connected component
+  path_length: 20      # Number of historic trail points to display
+```
+
+- **`min_area`**: Connected Component Analysis rejects any blob whose area is below this threshold, reporting `detected: false`.
+- **`display_debug_window`**: Can be set to `true` in the file or overridden at runtime via the `--debug-window` CLI flag.
+
+---
+
+## 6. Running Tests & Quality Checks
+
+Run the automated test suite (17 tests covering unit detection, zero-copy Zenoh messaging, and process lifecycles):
 ```bash
 pytest tests/ -v
 ```
 
-Run code formatting and linting:
+Linting and code style:
 ```bash
 ruff check src/ tests/
 ```
-

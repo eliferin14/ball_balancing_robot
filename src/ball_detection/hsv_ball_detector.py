@@ -32,6 +32,12 @@ class HSVDetectorConfig(BaseModel):
         ge=1.0,
         description="Minimum pixel area for the largest connected component",
     )
+    min_circularity: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum circularity (4*pi*area / perimeter^2) for the largest component",
+    )
     path_length: int = Field(
         default=20, ge=1, description="Number of past positions retained for debug trail"
     )
@@ -118,14 +124,25 @@ class HSVBallDetector(BallDetectorInterface):
             largest_area = float(areas[max_idx])
 
             if largest_area >= self.config.min_area:
-                # Keep strictly the largest connected component in the final mask
-                self._last_mask = ((labels == largest_label).astype(np.uint8) * 255)
-                cx, cy = centroids[largest_label]
-                position = (float(cx), float(cy))
-                self._path.append(position)
-                return position
+                component_mask = ((labels == largest_label).astype(np.uint8) * 255)
 
-        # No component found or largest component is below configured min_area
+                # Circularity validation
+                contours, _ = cv2.findContours(
+                    component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                if contours:
+                    main_contour = max(contours, key=cv2.contourArea)
+                    perimeter = cv2.arcLength(main_contour, closed=True)
+                    if perimeter > 0:
+                        circularity = (4.0 * np.pi * largest_area) / (perimeter * perimeter)
+                        if circularity >= self.config.min_circularity:
+                            self._last_mask = component_mask
+                            cx, cy = centroids[largest_label]
+                            position = (float(cx), float(cy))
+                            self._path.append(position)
+                            return position
+
+        # No component found or component failed min_area / circularity threshold
         self._last_mask = np.zeros_like(mask)
         self._path.append(None)
         return None
@@ -152,6 +169,13 @@ class HSVBallDetector(BallDetectorInterface):
             mask_indices = self._last_mask > 0
             debug_frame[mask_indices] = frame[mask_indices]
 
+            # Draw bright green outline border around the detected ball component
+            if np.any(mask_indices):
+                contours, _ = cv2.findContours(
+                    self._last_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                cv2.drawContours(debug_frame, contours, -1, (0, 255, 0), 2)
+
         # Draw trajectory trail
         path_len = len(self._path)
         for i in range(1, path_len):
@@ -171,8 +195,8 @@ class HSVBallDetector(BallDetectorInterface):
         if path_len > 0 and self._path[-1] is not None:
             last_pos = self._path[-1]
             pt = (int(last_pos[0]), int(last_pos[1]))
-            cv2.circle(debug_frame, pt, 8, (0, 255, 0), 2)
-            cv2.circle(debug_frame, pt, 2, (0, 0, 255), -1)
+            # Red center dot (outer green circle removed as requested)
+            cv2.circle(debug_frame, pt, 3, (0, 0, 255), -1)
             cv2.putText(
                 debug_frame,
                 f"Ball: ({last_pos[0]:.1f}, {last_pos[1]:.1f})",

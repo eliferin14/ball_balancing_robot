@@ -9,11 +9,12 @@ debug_window_name: "Ball Detection Debug"
 hsv:
   hue_min: 35.0
   hue_max: 85.0
-  sat_min: 0.0
+  sat_min: 50.0
   sat_max: 255.0
-  val_min: 0.0
+  val_min: 20.0
   val_max: 255.0
   closure_kernel_size: 7
-  min_area: 1500.0
+  min_area: 800.0
+  min_circularity: 0.5
   path_length: 20
 
