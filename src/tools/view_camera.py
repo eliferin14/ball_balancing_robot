@@ -37,9 +37,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logger.info(f"Connecting to Zenoh router at {args.endpoint}...")
+    # Sanitize endpoint format (e.g. handle tcp:// or tcp/)
+    endpoint = args.endpoint
+    if endpoint.startswith("tcp://"):
+        endpoint = "tcp/" + endpoint[6:]
+
+    logger.info(f"Connecting to Zenoh router at {endpoint}...")
     try:
-        session = zenoh.open(create_zenoh_config("client", args.endpoint))
+        session = zenoh.open(create_zenoh_config("client", endpoint))
     except Exception as err:
         logger.error(f"Failed to connect to Zenoh router at {args.endpoint}: {err}")
         sys.exit(1)

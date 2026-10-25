@@ -67,7 +67,8 @@ class ManagerOrchestrator:
         try:
             router_cfg = create_zenoh_config(mode="router", endpoint=self.zenoh_endpoint)
             self._router_session = zenoh.open(router_cfg)
-            logger.info(f"Zenoh router active on {self.zenoh_endpoint}")
+            listen_ep = self.zenoh_endpoint.replace("127.0.0.1", "0.0.0.0")
+            logger.info(f"Zenoh router active on {listen_ep}")
         except Exception as err:
             logger.info(
                 f"Zenoh router on {self.zenoh_endpoint} not started ({err}). "
@@ -226,6 +227,11 @@ def main() -> None:
         default=None,
         help="Path to video file when camera-source is file",
     )
+    parser.add_argument(
+        "--zenoh-endpoint",
+        default=DEFAULT_ZENOH_ENDPOINT,
+        help=f"Zenoh endpoint (default: {DEFAULT_ZENOH_ENDPOINT})",
+    )
     args = parser.parse_args()
 
     # Configure root loguru formatting
@@ -249,7 +255,10 @@ def main() -> None:
         camera_source=args.camera_source,
         video_file=args.video_file,
     )
-    orchestrator = ManagerOrchestrator(managers=managers)
+    orchestrator = ManagerOrchestrator(
+        managers=managers,
+        zenoh_endpoint=args.zenoh_endpoint,
+    )
 
     try:
         orchestrator.run()
