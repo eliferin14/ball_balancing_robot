@@ -7,11 +7,12 @@ from typing import Any
 import zenoh
 
 from src.managers.base_manager import DEFAULT_ZENOH_ENDPOINT, BaseManager
-from src.messages.camera import FrameMetadata
+from src.messages.camera import CAMERA_FRAME_TOPIC, FrameMetadata
 
 
 class CameraSourceType(StrEnum):
     """Supported video input source types."""
+
     REAL = "real"
     TEST = "test"
     FILE = "file"
@@ -35,7 +36,7 @@ class CameraManager(BaseManager):
         framerate: int = 30,
         device: str | None = None,
         file_path: str | Path | None = None,
-        topic: str = "robot/camera/frame",
+        topic: str = CAMERA_FRAME_TOPIC,
         loop_rate_hz: float | None = 60.0,
         log_file: Path | None = None,
         zenoh_mode: str = "client",
@@ -105,7 +106,7 @@ class CameraManager(BaseManager):
             if self.file_path is None or not self.file_path.exists():
                 raise FileNotFoundError(f"Video file does not exist: {self.file_path}")
             return (
-                f"filesrc location=\"{self.file_path}\" ! "
+                f'filesrc location="{self.file_path}" ! '
                 f"decodebin ! videoconvert ! videoscale ! {caps} ! "
                 f"{sink_elem}"
             )
@@ -135,6 +136,7 @@ class CameraManager(BaseManager):
         """Initialize GStreamer pipeline and Zenoh publisher."""
         # Import GStreamer within child process
         import gi
+
         gi.require_version("Gst", "1.0")
         from gi.repository import Gst
 
@@ -167,6 +169,7 @@ class CameraManager(BaseManager):
     def step(self) -> None:
         """Pull the latest frame from appsink and publish it over Zenoh SHM."""
         import gi
+
         gi.require_version("Gst", "1.0")
         from gi.repository import Gst
 
@@ -215,6 +218,7 @@ class CameraManager(BaseManager):
         self.logger.info("Stopping GStreamer camera pipeline...")
         if self._pipeline is not None:
             import gi
+
             gi.require_version("Gst", "1.0")
             from gi.repository import Gst
 

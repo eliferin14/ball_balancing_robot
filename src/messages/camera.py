@@ -2,6 +2,8 @@ from pydantic import Field
 
 from src.messages.system import BaseZenohMessage
 
+CAMERA_FRAME_TOPIC = "robot/camera/frame"
+
 
 class FrameMetadata(BaseZenohMessage):
     """Metadata describing a video frame transmitted zero-copy over Zenoh."""
@@ -12,4 +14,3 @@ class FrameMetadata(BaseZenohMessage):
     channels: int = Field(3, description="Number of color channels (e.g., 3 for BGR/RGB)")
     format: str = Field("BGR", description="Color format encoding (e.g. 'BGR', 'RGB', 'GRAY')")
     source_type: str = Field(..., description="Source type used ('real', 'test', 'file')")
-
