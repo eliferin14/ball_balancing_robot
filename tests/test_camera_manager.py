@@ -107,3 +107,24 @@ def test_camera_manager_invalid_source_fails() -> None:
     cam = CameraManager(config=cfg, name="FailCam")
     with pytest.raises(FileNotFoundError):
         cam.setup()
+
+
+def test_camera_manager_horizontal_flip() -> None:
+    """Test that CameraManager constructs pipeline with videoflip and captures flipped frames."""
+    cfg = CameraConfig(
+        source_type=CameraSourceType.TEST,
+        width=320,
+        height=240,
+        framerate=30,
+        hflip=True,
+    )
+    cam = CameraManager(config=cfg, name="FlipCam")
+    pipeline_str = cam._build_pipeline_str()
+    assert "videoflip method=horizontal-flip" in pipeline_str
+
+    cam.setup()
+    try:
+        cam.step()
+        assert cam._frame_id == 1
+    finally:
+        cam.teardown()

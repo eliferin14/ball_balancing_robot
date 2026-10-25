@@ -37,6 +37,8 @@ class CameraConfig(BaseModel):
     framerate: int = Field(default=30, description="Acquisition framerate")
     device: str | None = Field(default=None, description="V4L2 device path if using v4l2src")
     file_path: Path | None = Field(default=None, description="Video file path if using filesrc")
+    hflip: bool = Field(default=False, description="Whether to flip video horizontally")
+    vflip: bool = Field(default=False, description="Whether to flip video vertically")
     loop_rate_hz: float | None = Field(
         default=60.0, description="Step loop polling rate (set above framerate to prevent lag)"
     )
@@ -108,13 +110,21 @@ class CameraManager(BaseManager):
         caps = f"video/x-raw,format=BGR,width={self.config.width},height={self.config.height}"
         sink_elem = "appsink name=sink emit-signals=true drop=true max-buffers=1 sync=false"
 
+        flip_elem = ""
+        if self.config.hflip and self.config.vflip:
+            flip_elem = "videoflip method=rotate-180 ! "
+        elif self.config.hflip:
+            flip_elem = "videoflip method=horizontal-flip ! "
+        elif self.config.vflip:
+            flip_elem = "videoflip method=vertical-flip ! "
+
         if self.config.source_type == CameraSourceType.TEST:
             return (
                 f"videotestsrc is-live=true ! "
                 f"video/x-raw,framerate={self.config.framerate}/1 ! "
                 f"videoscale ! {caps} ! "
                 f"videoconvert ! {caps} ! "
-                f"{sink_elem}"
+                f"{flip_elem}{sink_elem}"
             )
 
         if self.config.source_type == CameraSourceType.FILE:
@@ -124,7 +134,7 @@ class CameraManager(BaseManager):
             return (
                 f'filesrc location="{file_path}" ! '
                 f"decodebin ! videoconvert ! videoscale ! {caps} ! "
-                f"{sink_elem}"
+                f"{flip_elem}{sink_elem}"
             )
 
         if self.config.source_type == CameraSourceType.REAL:
@@ -135,7 +145,7 @@ class CameraManager(BaseManager):
                     f"v4l2src device={self.config.device} ! "
                     f"video/x-raw,framerate={self.config.framerate}/1 ! "
                     f"videoconvert ! videoscale ! {caps} ! "
-                    f"{sink_elem}"
+                    f"{flip_elem}{sink_elem}"
                 )
             # Default Raspberry Pi camera using libcamerasrc
             return (
@@ -143,7 +153,7 @@ class CameraManager(BaseManager):
                 f"video/x-raw,width={self.config.width},height={self.config.height},"
                 f"framerate={self.config.framerate}/1 ! "
                 f"videoconvert ! {caps} ! "
-                f"{sink_elem}"
+                f"{flip_elem}{sink_elem}"
             )
 
         raise ValueError(f"Unsupported CameraSourceType: {self.config.source_type}")

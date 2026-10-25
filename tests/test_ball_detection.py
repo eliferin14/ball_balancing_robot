@@ -20,8 +20,8 @@ from src.messages.camera import FrameMetadata
 def test_hsv_ball_detector_synthetic_frame() -> None:
     """Test that HSVBallDetector locates a synthetic colored circle accurately."""
     config = HSVDetectorConfig(
-        hue_min=140.0,
-        hue_max=180.0,
+        hue_min=35.0,
+        hue_max=85.0,
         sat_min=100.0,
         sat_max=255.0,
         val_min=100.0,
@@ -32,8 +32,8 @@ def test_hsv_ball_detector_synthetic_frame() -> None:
     # Synthetic 240x320 BGR image
     frame = np.zeros((240, 320, 3), dtype=np.uint8)
 
-    # Target color: Hue 160 (pink/red), Sat 200, Val 200
-    hsv_color = np.uint8([[[160, 200, 200]]])
+    # Target color: Hue 60 (pure green in OpenCV), Sat 200, Val 200
+    hsv_color = np.uint8([[[60, 200, 200]]])
     bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0, 0]
     center_x, center_y = 160, 120
     radius = 15
@@ -46,6 +46,9 @@ def test_hsv_ball_detector_synthetic_frame() -> None:
         -1,
     )
 
+    # Add a colorful background rectangle (pure blue) that is not the ball
+    cv2.rectangle(frame, (10, 10), (30, 30), (255, 0, 0), -1)
+
     detected = detector.detect_ball(frame)
     assert detected is not None
     det_x, det_y = detected
@@ -56,6 +59,14 @@ def test_hsv_ball_detector_synthetic_frame() -> None:
     debug_frame = detector.draw_debug_frame(frame)
     assert debug_frame.shape == (240, 320, 3)
 
+    # Background rectangle (15, 15) must now be converted to black & white (B == G == R)
+    bg_pixel = debug_frame[15, 15]
+    assert bg_pixel[0] == bg_pixel[1] == bg_pixel[2]
+
+    # Masked ball center (160, 120) retains its distinct color indicator
+    ball_pixel = debug_frame[center_y, center_x]
+    assert not (ball_pixel[0] == ball_pixel[1] == ball_pixel[2])
+
 
 def test_hsv_ball_detector_no_ball() -> None:
     """Test that HSVBallDetector returns None when no colored ball is present."""
@@ -64,13 +75,70 @@ def test_hsv_ball_detector_no_ball() -> None:
     assert detector.detect_ball(frame) is None
 
 
+def test_hsv_ball_detector_connected_components_largest_only() -> None:
+    """Test that only the largest connected component is kept in mask and tracked."""
+    config = HSVDetectorConfig(
+        hue_min=35.0,
+        hue_max=85.0,
+        min_area=50.0,
+        closure_kernel_size=1,  # Keep kernel 1 to prevent fusing
+    )
+    detector = HSVBallDetector(config=config)
+
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    hsv_green = np.uint8([[[60, 200, 200]]])
+    bgr_green = cv2.cvtColor(hsv_green, cv2.COLOR_HSV2BGR)[0, 0]
+    color = (int(bgr_green[0]), int(bgr_green[1]), int(bgr_green[2]))
+
+    # Small component at (50, 50) of radius 4 (area ~ 50)
+    cv2.circle(frame, (50, 50), 4, color, -1)
+
+    # Large component at (200, 150) of radius 16 (area ~ 800)
+    cv2.circle(frame, (200, 150), 16, color, -1)
+
+    coords = detector.detect_ball(frame)
+    assert coords is not None
+    # Must match the larger component, ignoring the smaller one
+    assert abs(coords[0] - 200) < 1.5
+    assert abs(coords[1] - 150) < 1.5
+
+    # Mask must strictly contain the large component, NOT the small one
+    assert detector._last_mask is not None
+    assert detector._last_mask[150, 200] == 255
+    assert detector._last_mask[50, 50] == 0
+
+
+def test_hsv_ball_detector_min_area_threshold() -> None:
+    """Test that components below the configured min_area threshold return None."""
+    config = HSVDetectorConfig(
+        hue_min=35.0,
+        hue_max=85.0,
+        min_area=100.0,
+        closure_kernel_size=1,
+    )
+    detector = HSVBallDetector(config=config)
+
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    hsv_green = np.uint8([[[60, 200, 200]]])
+    bgr_green = cv2.cvtColor(hsv_green, cv2.COLOR_HSV2BGR)[0, 0]
+    color = (int(bgr_green[0]), int(bgr_green[1]), int(bgr_green[2]))
+
+    # Circle with radius 4 has area ~ 50 pixels (< min_area 100)
+    cv2.circle(frame, (100, 100), 4, color, -1)
+
+    assert detector.detect_ball(frame) is None
+    assert detector._last_mask is not None
+    assert np.all(detector._last_mask == 0)
+
+
 def test_ball_detection_manager_config_loading() -> None:
     """Test that default ball detector YAML config loads cleanly into Pydantic model."""
     config = load_config(DEFAULT_BALL_DETECTOR_CONFIG_PATH, BallDetectionManagerConfig)
     assert config.strategy == "hsv"
     assert config.input_frame_topic == "robot/camera/frame"
     assert config.output_position_topic == BALL_POSITION_TOPIC
-    assert config.hsv.closure_kernel_size == 5
+    assert config.hsv.closure_kernel_size >= 1
+    assert config.hsv.min_area >= 1.0
 
 
 def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None:
@@ -105,9 +173,9 @@ def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None
     manager.setup()
 
     try:
-        # Build synthetic frame with red/pink ball at (100, 80)
+        # Build synthetic frame with green ball at (100, 80)
         frame = np.zeros((240, 320, 3), dtype=np.uint8)
-        hsv_color = np.uint8([[[160, 200, 200]]])
+        hsv_color = np.uint8([[[60, 200, 200]]])
         bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0, 0]
         cv2.circle(
             frame,

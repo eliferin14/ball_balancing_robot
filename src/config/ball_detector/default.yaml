@@ -5,14 +5,15 @@ strategy: "hsv"
 display_debug_window: false
 debug_window_name: "Ball Detection Debug"
 
-# Parameters for HSV color thresholding strategy
+# Parameters for HSV color thresholding strategy (Green filter)
 hsv:
-  hue_min: 140.0
-  hue_max: 180.0
-  sat_min: 50.0
+  hue_min: 35.0
+  hue_max: 85.0
+  sat_min: 0.0
   sat_max: 255.0
-  val_min: 50.0
+  val_min: 0.0
   val_max: 255.0
-  closure_kernel_size: 5
+  closure_kernel_size: 7
+  min_area: 1500.0
   path_length: 20
 

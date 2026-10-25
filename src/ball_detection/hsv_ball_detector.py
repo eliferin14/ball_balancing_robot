@@ -10,8 +10,8 @@ from src.ball_detection.ball_detector_interface import BallDetectorInterface
 class HSVDetectorConfig(BaseModel):
     """Configuration parameters for HSV color segmentation ball detection."""
 
-    hue_min: float = Field(default=140.0, ge=0.0, le=180.0, description="Minimum Hue (0-180)")
-    hue_max: float = Field(default=180.0, ge=0.0, le=180.0, description="Maximum Hue (0-180)")
+    hue_min: float = Field(default=35.0, ge=0.0, le=180.0, description="Minimum Hue (0-180)")
+    hue_max: float = Field(default=85.0, ge=0.0, le=180.0, description="Maximum Hue (0-180)")
     sat_min: float = Field(
         default=50.0, ge=0.0, le=255.0, description="Minimum Saturation (0-255)"
     )
@@ -26,6 +26,11 @@ class HSVDetectorConfig(BaseModel):
     )
     closure_kernel_size: int = Field(
         default=5, ge=1, description="Kernel size for erosion/dilation cleaning"
+    )
+    min_area: float = Field(
+        default=20.0,
+        ge=1.0,
+        description="Minimum pixel area for the largest connected component",
     )
     path_length: int = Field(
         default=20, ge=1, description="Number of past positions retained for debug trail"
@@ -100,19 +105,28 @@ class HSVBallDetector(BallDetectorInterface):
             mask = cv2.erode(mask, self._kernel)
             mask = cv2.dilate(mask, self._kernel)
 
-        self._last_mask = mask
+        # Connected component analysis to isolate and retain only the largest component
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            mask, connectivity=8
+        )
 
-        # Calculate centroid via spatial moments
-        moments = cv2.moments(mask)
-        area = moments["m00"]
+        if num_labels > 1:
+            # Foreground labels start at 1 (index 0 is background)
+            areas = stats[1:, cv2.CC_STAT_AREA]
+            max_idx = int(np.argmax(areas))
+            largest_label = max_idx + 1
+            largest_area = float(areas[max_idx])
 
-        if area > 10.0:  # Minimum pixel area threshold to discard minor noise
-            cx = float(moments["m10"] / area)
-            cy = float(moments["m01"] / area)
-            position = (cx, cy)
-            self._path.append(position)
-            return position
+            if largest_area >= self.config.min_area:
+                # Keep strictly the largest connected component in the final mask
+                self._last_mask = ((labels == largest_label).astype(np.uint8) * 255)
+                cx, cy = centroids[largest_label]
+                position = (float(cx), float(cy))
+                self._path.append(position)
+                return position
 
+        # No component found or largest component is below configured min_area
+        self._last_mask = np.zeros_like(mask)
         self._path.append(None)
         return None
 
@@ -126,7 +140,17 @@ class HSVBallDetector(BallDetectorInterface):
         Returns:
             Frame with visual annotations.
         """
-        debug_frame = frame.copy()
+        # Render background scene in black & white (grayscale)
+        if len(frame.shape) == 3 and frame.shape[2] == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            debug_frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        else:
+            debug_frame = frame.copy()
+
+        # Restore original color strictly for the final detected mask of the ball
+        if self._last_mask is not None and self._last_mask.shape == frame.shape[:2]:
+            mask_indices = self._last_mask > 0
+            debug_frame[mask_indices] = frame[mask_indices]
 
         # Draw trajectory trail
         path_len = len(self._path)
