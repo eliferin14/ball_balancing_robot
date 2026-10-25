@@ -1,0 +1,23 @@
+# Ball Detection Manager Configuration
+input_frame_topic: "robot/camera/frame"
+output_position_topic: "robot/ball/position"
+strategy: "hsv"
+display_debug_window: false
+debug_window_name: "Ball Detection Debug"
+save_debug_video: false
+
+# Parameters for HSV color thresholding strategy (Green filter)
+hsv:
+  hue_min: 35.0
+  hue_max: 85.0
+  sat_min: 50.0
+  sat_max: 255.0
+  val_min: 20.0
+  val_max: 255.0
+  closure_kernel_size: 11
+  min_area: 800.0
+  min_circularity: 0.5
+  use_convex_hull: true
+  use_min_enclosing_circle: true
+  path_length: 20
+

@@ -41,9 +41,9 @@ sim = [
     "ansitable>=0.11.0",
 ]
 
-# Raspberry Pi target dependencies (camera streaming, headless runtime, edge drivers)
+# Raspberry Pi target dependencies (camera streaming, edge drivers)
 pi = [
-    "opencv-python-headless>=4.10.0",
+    "opencv-python>=4.10.0",
     "PyGObject>=3.46.0",
 ]
 

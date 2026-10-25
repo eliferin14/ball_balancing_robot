@@ -5,5 +5,6 @@ width: 320
 height: 240
 framerate: 30
 device: null
+hflip: true
 loop_rate_hz: 60.0
 
