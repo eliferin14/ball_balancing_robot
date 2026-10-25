@@ -332,6 +332,8 @@ class BaseManager(ABC):
                     sleep_duration = period - elapsed
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
+                else:
+                    time.sleep(0.001)
 
             self.logger.info(f"Manager '{self.name}' loop terminated cleanly.")
             self.publish_status(ManagerState.STOPPING)

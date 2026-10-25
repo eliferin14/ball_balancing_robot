@@ -133,7 +133,10 @@ class ManagerOrchestrator:
             self._is_shutting_down = True
             logger.info("Broadcasting stop command to all managers...")
 
-            # 1. Broadcast stop command over Zenoh
+            # 1. Trigger shared multiprocessing event for local process loops immediately
+            self._stop_event.set()
+
+            # 2. Broadcast stop command over Zenoh
             if self._router_session is not None:
                 try:
                     cmd = ControlCommand(action="STOP", target="all", sender="orchestrator")
@@ -142,10 +145,7 @@ class ManagerOrchestrator:
                 except Exception as err:
                     logger.debug(f"Failed to publish stop command over Zenoh: {err}")
 
-            # 2. Trigger shared multiprocessing event for local process loops
-            self._stop_event.set()
-
-    def wait_for_shutdown(self, timeout_sec: float = 4.0) -> None:
+    def wait_for_shutdown(self, timeout_sec: float = 2.0) -> None:
         """Wait for child processes to finish cleanly, terminating any hanging process."""
         self.stop()
         logger.info(f"Waiting up to {timeout_sec}s for child processes to exit...")
@@ -159,6 +159,12 @@ class ManagerOrchestrator:
                     )
                     proc.terminate()
                     proc.join(timeout=1.0)
+                    if proc.is_alive():
+                        logger.warning(
+                            f"Manager '{proc.name}' (PID {proc.pid}) still alive. Killing..."
+                        )
+                        proc.kill()
+                        proc.join(timeout=0.5)
 
         if self._router_session is not None:
             try:

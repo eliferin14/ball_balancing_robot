@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -45,7 +47,7 @@ class BallDetectionManagerConfig(BaseModel):
     )
     loop_rate_hz: float | None = Field(
         default=None,
-        description="Step loop rate in Hz; None for purely event-driven subscriber",
+        description="Step loop rate in Hz; None to process as frames arrive",
     )
     log_file: Path | None = Field(
         default=None,
@@ -64,6 +66,10 @@ class BallDetectionManagerConfig(BaseModel):
 class BallDetectionManager(BaseManager):
     """
     Manager consuming camera frames over Zenoh and publishing detected ball positions.
+
+    Decouples frame reception from vision/GUI processing using the 'latest frame'
+    pattern so stale frames are dropped and queue lag is completely eliminated.
+    OpenCV GUI operations are kept strictly in the process's main thread.
     """
 
     def __init__(
@@ -102,12 +108,26 @@ class BallDetectionManager(BaseManager):
         self.config: BallDetectionManagerConfig = resolved_config
         self.detector: BallDetectorInterface | None = None
 
+        # Thread synchronization & frame buffer
+        self._new_frame_event: threading.Event | None = None
+        self._latest_sample: zenoh.Sample | None = None
+
         # Runtime Zenoh handles
         self._subscriber: zenoh.Subscriber | None = None
         self._publisher: zenoh.Publisher | None = None
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Strip runtime synchronization and network handles before pickle spawn."""
+        state = super().__getstate__()
+        state["_new_frame_event"] = None
+        state["_latest_sample"] = None
+        state["_subscriber"] = None
+        state["_publisher"] = None
+        state["detector"] = None
+        return state
+
     def setup(self) -> None:
-        """Initialize detection strategy and Zenoh subscriber/publisher."""
+        """Initialize detection strategy, frame event, and Zenoh pub/sub."""
         self.logger.info(
             f"Initializing BallDetectionManager with strategy '{self.config.strategy}'..."
         )
@@ -116,6 +136,9 @@ class BallDetectionManager(BaseManager):
             self.detector = HSVBallDetector(self.config.hsv)
         else:
             raise ValueError(f"Unknown ball detection strategy: {self.config.strategy}")
+
+        self._new_frame_event = threading.Event()
+        self._latest_sample = None
 
         if self._session is not None:
             self.logger.info(
@@ -133,19 +156,37 @@ class BallDetectionManager(BaseManager):
 
     def _on_frame(self, sample: zenoh.Sample) -> None:
         """
-        Callback triggered whenever a new camera frame arrives over Zenoh.
+        Fast non-blocking callback from Zenoh subscriber thread.
 
-        Args:
-            sample: Zenoh sample containing raw frame payload and attachment metadata.
+        Saves only the newest incoming sample and signals the main step loop.
+        Stale buffered frames are discarded, guaranteeing zero latency.
         """
-        if self.detector is None or self._publisher is None:
+        self._latest_sample = sample
+        if self._new_frame_event is not None:
+            self._new_frame_event.set()
+
+    def step(self) -> None:
+        """
+        Main execution step. Processes the latest available frame and runs GUI.
+        """
+        if self._new_frame_event is None:
+            return
+
+        # Wait briefly for a new frame; allows quick exit if stop was signaled
+        if not self._new_frame_event.wait(timeout=0.03):
+            return
+        self._new_frame_event.clear()
+
+        sample = self._latest_sample
+        if (
+            sample is None
+            or not sample.attachment
+            or self.detector is None
+            or self._publisher is None
+        ):
             return
 
         try:
-            if not sample.attachment:
-                self.logger.warning("Received frame sample without attachment metadata.")
-                return
-
             meta = FrameMetadata.model_validate_json(bytes(sample.attachment))
             frame = np.frombuffer(bytes(sample.payload), dtype=np.uint8).reshape(
                 (meta.height, meta.width, meta.channels)
@@ -173,14 +214,19 @@ class BallDetectionManager(BaseManager):
             if self.config.display_debug_window:
                 debug_frame = self.detector.draw_debug_frame(frame)
                 cv2.imshow(self.config.debug_window_name, debug_frame)
-                cv2.waitKey(1)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q") or key == 27:
+                    self.logger.info("Quit key pressed in debug window. Stopping manager...")
+                    self.stop()
 
         except Exception as err:
             self.logger.error(f"Error processing camera frame sample: {err}")
 
-    def step(self) -> None:
-        """Execution step loop (idle since frame processing is event-driven)."""
-        pass
+    def stop(self) -> None:
+        """Signal manager to stop and wake up any waiting step loops."""
+        super().stop()
+        if self._new_frame_event is not None:
+            self._new_frame_event.set()
 
     def teardown(self) -> None:
         """Release Zenoh subscriber, publisher, and OpenCV debug windows."""

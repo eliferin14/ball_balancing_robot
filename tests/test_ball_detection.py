@@ -130,7 +130,8 @@ def test_ball_detection_manager_zenoh_pipeline(free_zenoh_endpoint: str) -> None
 
         deadline = time.time() + 3.0
         while len(received_positions) == 0 and time.time() < deadline:
-            time.sleep(0.05)
+            manager.step()
+            time.sleep(0.02)
 
         assert len(received_positions) > 0
         last_pos = received_positions[-1]
