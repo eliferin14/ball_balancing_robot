@@ -248,11 +248,22 @@ class BallDetectionManager(BaseManager):
                     self._video_writer.write(debug_frame)
 
                 if self.config.display_debug_window:
-                    cv2.imshow(self.config.debug_window_name, debug_frame)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord("q") or key == 27:
-                        self.logger.info("Quit key pressed in debug window. Stopping manager...")
-                        self.stop()
+                    try:
+                        cv2.imshow(self.config.debug_window_name, debug_frame)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord("q") or key == 27:
+                            self.logger.info("Quit key pressed. Stopping manager...")
+                            self.stop()
+                    except cv2.error as cv_err:
+                        if "not implemented" in str(cv_err).lower():
+                            self.logger.warning(
+                                "OpenCV HighGUI is not implemented in this build "
+                                "(e.g. opencv-python-headless is installed). "
+                                "Disabling window display; detection continues headlessly."
+                            )
+                            self.config.display_debug_window = False
+                        else:
+                            raise
 
         except Exception as err:
             self.logger.error(f"Error processing camera frame sample: {err}")
