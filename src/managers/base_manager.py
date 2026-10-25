@@ -8,13 +8,16 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 from types import FrameType
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import zenoh
 from loguru import logger
 from pydantic import BaseModel
 
 from src.messages.system import ControlCommand, ManagerState, ManagerStatus
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -100,7 +103,7 @@ class BaseManager(ABC):
         self._logger: Any | None = None
 
     @property
-    def logger(self) -> Any:
+    def logger(self) -> Logger:
         """Contextualized logger instance bound to this manager's name."""
         if self._logger is None:
             self._logger = logger.bind(manager=self.name)
@@ -156,6 +159,7 @@ class BaseManager(ABC):
 
     def _setup_signal_handlers(self) -> None:
         """Register OS signal handlers to ensure clean shutdown on SIGINT/SIGTERM."""
+
         def _handle_signal(signum: int, _frame: FrameType | None) -> None:
             sig_name = signal.Signals(signum).name
             self.logger.info(f"Received signal {sig_name}, initiating graceful stop...")
