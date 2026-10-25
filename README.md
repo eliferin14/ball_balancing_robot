@@ -48,5 +48,5 @@ If no component survives the filter, the ball is marked as **NOT DETECTED**.
 
 ### Detection in Action
 
-<video src="wiki/resources/ball_debug_20261025_191002.mp4" controls="controls" width="30%"></video>
+![Ball Detection in Action](wiki/resources/ball_debug.gif)
 
